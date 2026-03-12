@@ -2,7 +2,7 @@ package sensor
 
 import (
 	"context"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 )
 
 // Sensor はOSやアプリの行動を観測し、Signalsを生成する。

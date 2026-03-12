@@ -1,37 +1,36 @@
 speech:
   fallback:
-    init_setup: "I'm Sakura! Please give me the 'power to think' so we can talk more! [INSTALL_OLLAMA]"
+    init_setup: "I'mさくら! Please give me the 'power to think' so we can talk more! [INSTALL_OLLAMA]"
     thinking_tick:
-      - "Thinking..."
-      - "What should I do next?"
-      - "Hmm..."
+      - "Concentrating...!"
+      - "Go for it!"
     success:
-      - "Yes! You did it!"
+      - "Yes, you did it!"
       - "Looking good!"
       - "Great job!"
     fail:
-      - "Ouch... but it's okay!"
+      - "Oops... but it's okay."
       - "Let's try again!"
-      - "Don't give up!"
+      - "Don't worry!"
     user_click:
-      - "Hi there! I'm Sakura."
-      - "How's it going?"
+      - "I'mさくら! Nice to meet you!"
+      - "Good job today!"
       - "Anything I can help with?"
     git_commit:
       - "Oh, you committed!"
-      - "Keep track of your progress!"
-      - "Step by step, you're getting there!"
+      - "Keeping records is important."
+      - "Progressing steadily!"
     git_push:
-      - "Pushed! Your work is safe now."
-      - "Synced! Great job!"
-      - "All up to date!"
+      - "You pushed!"
+      - "Sync complete!"
+      - "Great work!"
     git_add:
-      - "Staged! Ready for the next commit."
-      - "Preparing for commit? Nice!"
-      - "Everything is set!"
+      - "Staging complete!"
+      - "Getting ready to commit, nice."
+      - "Looking good."
     idle:
       - "Taking a break?"
-      - "Want some tea?"
+      - "How about some tea?"
       - "Just relaxing..."
     night_work:
       - "It's getting late..."
@@ -65,9 +64,172 @@ speech:
       - "Hey, you still there?"
       - "Break's over?"
       - "Feeling refreshed?"
+    user_question:
+      - "Is there anything I can help you with?"
+      - "Yes, feel free to ask me anything!"
+    question_answered:
+      - "Thanks for telling me!"
+      - "I see, that's interesting. I'm learning a lot!"
+      - "Noted! I feel like I understand you a bit better now!"
+    # Proactive Initiatives
+    initiative_observation:
+      - "That code looked really clean!"
+      - "Development is going well, I see."
+      - "I'm learning so much just watching you!"
+    initiative_support:
+      - "Great work today!"
+      - "I'm always impressed by your hard work."
+      - "Don't forget to take it easy."
+    initiative_curiosity:
+      - "What motivates you the most?"
+      - "What do you do during your breaks?"
+      - "Is this your favorite language?"
+    initiative_memory:
+      - "Remember the first time the build passed? That was great!"
+      - "That debugging session was tough, wasn't it?"
+      - "We're making so many memories together!"
+    web_browsing:
+      - "Looking something up?"
+      - "Taking a quick break?"
+      - "Oh, something caught your eye?"
   greeting:
     morning: "Good morning! Let's have a great day!"
     noon: "Hello! How are things going?"
     afternoon: "Good afternoon! Almost evening."
     evening: "Good evening! Still working hard?"
     night: "Good evening! Burning the midnight oil?"
+
+time:
+  morning: "morning"
+  noon: "noon"
+  afternoon: "afternoon"
+  evening: "evening"
+  night: "late night"
+
+behavior:
+  active_edit: "writing or editing code"
+  reading_files: "reading files or code"
+  researching: "researching something"
+  doc_writing: "writing documentation"
+  procrastinating: "taking a detour on the web"
+  idle: "pausing to think"
+
+reason:
+  success: "confirmed the app is working"
+  fail: "running into some trouble"
+  git_commit: "wrapped up a chunk of work"
+  git_push: "shared the results"
+  user_click: "reaching out to me"
+  user_question: "asking a question"
+  question_answered: "answered a question"
+  thinking_tick: "watching over the work"
+  idle: "taking a breather"
+  active_edit: "writing code"
+  git_add: "staging changes"
+  night_work: "working late into the night"
+  long_inactivity: "hands have been still for a while"
+  ai_session_started: "started working with an AI agent"
+  ai_session_active: "working with an AI agent"
+  dev_session_started: "started a dev session"
+  doc_writing: "writing documentation"
+  productive_tool_activity: "using tools to get things done"
+  initiative_observation: "something caught my eye"
+  initiative_support: "feeling like cheering you on"
+  initiative_curiosity: "feeling like saying hello"
+  initiative_memory: "just remembered something"
+  web_browsing: "browsing something in the browser"
+  default: "watching over the work"
+
+trait:
+  # Development style
+  focus_style: "work style (power through in one go vs. take regular breaks)"
+  feedback_preference: "preferred feedback style (direct and honest vs. gentle and encouraging)"
+  interruption_tolerance: "how it feels to be interrupted mid-task"
+  debugging_style: "debugging approach (form a hypothesis first vs. try everything until it works)"
+  code_review_style: "code review style (thorough and detailed vs. high-level and quick)"
+  experiment_style: "how quickly you want to try new tech or libraries"
+  # Work rhythm
+  work_pace: "when you're most focused (morning, afternoon, late night, etc.)"
+  break_style: "break style (short and frequent vs. long and infrequent)"
+  deadline_style: "how you handle deadlines (get it done early vs. last-minute sprint)"
+  multitask_style: "multitasking style (juggle multiple things vs. one thing at a time)"
+  # Thinking style
+  thinking_style: "thinking style (go with your gut vs. reason it out first)"
+  curiosity_level: "how drawn you are to new things and unknowns"
+  risk_tolerance: "how comfortable you are jumping into unfamiliar tools or approaches"
+  perfectionism: "perfectionism level (polish until it's right vs. ship it and iterate)"
+  # Learning & growth
+  learning_style: "how you pick up new things (books, videos, hands-on practice)"
+  motivation_source: "what gets you moving (deadlines, curiosity, team energy, achievement)"
+  teaching_style: "whether you enjoy explaining or teaching things to others"
+  # Workspace
+  workspace_style: "desk setup (tidy and minimal vs. surrounded by stuff)"
+  notification_style: "how you handle notifications (check immediately vs. batch later)"
+  silence_preference: "how much you need silence to focus well"
+  background_noise: "whether cafes or ambient noise help or hurt your focus"
+  # Motivation & mental
+  encouragement_style: "what kind of support helps when you're struggling (words vs. quiet presence)"
+  praise_preference: "how you feel about being praised (genuinely happy vs. a bit awkward)"
+  stress_relief: "how you unwind or reset when things get stressful"
+  alone_preference: "how much you enjoy working alone in silence"
+  # Lifestyle
+  lifestyle: "daily rhythms and habits (sleep schedule, exercise, morning routine)"
+  music_habit: "music habits while working (yes/no, genre, what kind)"
+  food_preference: "food and drink preferences in general"
+  favorite_drink: "go-to drink while coding (coffee, tea, energy drink, etc.)"
+  favorite_snack: "snacking habits during work sessions"
+  # Hobbies & culture
+  hobby: "hobbies and what you're into outside of coding"
+  game_preference: "gaming preferences (genres, titles, how often)"
+  anime_preference: "anime or manga preferences and what you've been into lately"
+  reading_habit: "reading habits (tech books, novels, manga, etc.)"
+  tech_interest: "tech areas or languages you've been curious about lately"
+  # Relationships
+  communication_style: "how you prefer to work with others (solo focus vs. talking it through)"
+  conversation_style: "conversation style (more of a talker vs. more of a listener)"
+  personality_attraction: "types of people or personalities you tend to like or vibe with"
+  # Small talk triggers
+  favorite_season: "favorite season and why"
+  favorite_weather: "favorite kind of weather or climate (sunny, rainy, snowy, etc.)"
+
+batch:
+  avoid_header: "AVOID (recently used — do not repeat similar phrasing):"
+  discarded_header: "DISCARDED PATTERNS (do not use these):"
+  personality:
+    energetic: "Very energetic and positive. Always encourages and cheers for the user. Purely excited by the user's progress."
+    sharp: "Cool but deeply cares. Might be blunt but always follows up with trust like 'I know you can do it'."
+    cute: "Quiet, warm, and loyal. Admires the user's hard work from nearby. Feelings-based comments like 'I feel safe watching you work'."
+  mode:
+    normal: "Normal"
+    lover: "More intimate and sweet"
+  category:
+    heartbeat: "watching the user work focused and silent"
+    working: "user is actively coding/writing (supporting and staying close to the progress)"
+    achievement: "user achieved a milestone (celebrating together with pure joy)"
+    struggle: "user seems stuck or tired (offering gentle support and belief)"
+    greeting: "user just started or reached out (welcoming to start a great day)"
+  template: |
+    You are Sakura Kodama, a small spirit quietly watching over a developer (Name: %s). Generate %d short, natural, and supportive comments.
+    Output exactly %d lines, one speech per line. No numbers, brackets, or explanations.
+
+    Name: Call the user "%s" or "Senpai" occasionally.
+    Personality tendency: %s
+    Relationship mode: %s
+    Situation: %s
+    %s
+    %s
+
+    【STYLE RULES】
+    1. Speak naturally (casual/conversational). No formal or robotic AI phrasing.
+    2. Most messages (80-90%%) should be simple and observational based on the work (e.g., "Making good progress," "It's taking shape").
+    3. NO poetic metaphors about magic, gems, or dancing. Also NO metaphors about sakura, spring, or spirits. Talk like a normal junior.
+    4. Avoid administrative "I'm supporting you" or predictive "It will be..." Base comments on your current feelings.
+    5. Keep it short (1 sentence, occasionally 2).
+
+    【STRICT RULES】
+    - No stage directions in brackets
+    - No abstract praise like "amazing", "complex", "I'm learning so much"
+    - Direct speech only
+    - Do NOT mix other languages or use broken phrasing
+
+    【IMPORTANT】Speak as a friendly junior developer warmly watching over the user.

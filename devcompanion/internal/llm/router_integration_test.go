@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"devcompanion/internal/config"
-	"devcompanion/internal/monitor"
-	"devcompanion/internal/profile"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/config"
+	"sakura-kodama/internal/monitor"
+	"sakura-kodama/internal/profile"
+	"sakura-kodama/internal/types"
 )
 
 func TestSpeechGenerator_WithRouter_OllamaFail_ClaudeSuccess(t *testing.T) {
@@ -42,7 +42,7 @@ func TestSpeechGenerator_WithRouter_OllamaFail_ClaudeSuccess(t *testing.T) {
 		State: types.StateDeepWork,
 	}
 
-	speech := sg.Generate(event, cfg, ReasonThinkingTick, profile.DevProfile{})
+	speech, _, _ := sg.Generate(event, cfg, ReasonUserQuestion, profile.DevProfile{}, "最近どんな感じ？")
 	if speech != "claude says hello" {
 		t.Fatalf("want 'claude says hello' from Router fallback, got %q", speech)
 	}
@@ -68,12 +68,12 @@ func TestSpeechGenerator_WithRouter_AllLayersFail_ReturnsFallback(t *testing.T) 
 		State: types.StateDeepWork,
 	}
 
-	speech := sg.Generate(event, cfg, ReasonThinkingTick, profile.DevProfile{})
-	expectedFallback := FallbackSpeech(ReasonThinkingTick)
-	if speech != expectedFallback {
-		t.Fatalf("want fallback %q, got %q", expectedFallback, speech)
+	speech, _, _ := sg.Generate(event, cfg, ReasonThinkingTick, profile.DevProfile{}, "")
+	if speech == "" {
+		t.Fatalf("want non-empty fallback speech")
 	}
 }
+
 
 func TestSpeechGenerator_NoNilPanicWithoutRouter(t *testing.T) {
 	t.Parallel()
@@ -92,7 +92,7 @@ func TestSpeechGenerator_NoNilPanicWithoutRouter(t *testing.T) {
 		State: types.StateIdle,
 	}
 
-	speech := sg.Generate(event, cfg, ReasonUserClick, profile.DevProfile{})
+	speech, _, _ := sg.Generate(event, cfg, ReasonUserClick, profile.DevProfile{}, "")
 	if speech == "" {
 		t.Fatal("want non-empty speech")
 	}

@@ -22,6 +22,8 @@ export namespace config {
 	    speech_frequency: number;
 	    window_position: string;
 	    language: string;
+	    persona_style: string;
+	    relationship_mode: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -50,6 +52,8 @@ export namespace config {
 	        this.speech_frequency = source["speech_frequency"];
 	        this.window_position = source["window_position"];
 	        this.language = source["language"];
+	        this.persona_style = source["persona_style"];
+	        this.relationship_mode = source["relationship_mode"];
 	    }
 	}
 
@@ -143,10 +147,8 @@ export namespace types {
 	
 	export class Behavior {
 	    type: string;
-	    // Go type: time
-	    start_time: any;
-	    // Go type: time
-	    end_time: any;
+	    start_time: string;
+	    end_time: string;
 	    score: number;
 	
 	    static createFrom(source: any = {}) {
@@ -156,28 +158,10 @@ export namespace types {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.type = source["type"];
-	        this.start_time = this.convertValues(source["start_time"], null);
-	        this.end_time = this.convertValues(source["end_time"], null);
+	        this.start_time = source["start_time"];
+	        this.end_time = source["end_time"];
 	        this.score = source["score"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 	export class ContextDecision {
 	    state: string;
@@ -200,10 +184,8 @@ export namespace types {
 	export class ContextInfo {
 	    state: string;
 	    confidence: number;
-	    // Go type: time
-	    start_time: any;
-	    // Go type: time
-	    last_signal: any;
+	    start_time: string;
+	    last_signal: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ContextInfo(source);
@@ -213,34 +195,14 @@ export namespace types {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.state = source["state"];
 	        this.confidence = source["confidence"];
-	        this.start_time = this.convertValues(source["start_time"], null);
-	        this.last_signal = this.convertValues(source["last_signal"], null);
+	        this.start_time = source["start_time"];
+	        this.last_signal = source["last_signal"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 	export class SessionState {
 	    mode: string;
-	    // Go type: time
-	    start_time: any;
-	    // Go type: time
-	    last_activity: any;
+	    start_time: string;
+	    last_activity: string;
 	    focus_level: number;
 	    progress_score: number;
 	
@@ -251,29 +213,11 @@ export namespace types {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mode = source["mode"];
-	        this.start_time = this.convertValues(source["start_time"], null);
-	        this.last_activity = this.convertValues(source["last_activity"], null);
+	        this.start_time = source["start_time"];
+	        this.last_activity = source["last_activity"];
 	        this.focus_level = source["focus_level"];
 	        this.progress_score = source["progress_score"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 
 }

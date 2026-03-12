@@ -21,7 +21,7 @@ type GeminiClient struct {
 func NewGeminiClient(apiKey string) *GeminiClient {
 	return &GeminiClient{
 		apiKey:  apiKey,
-		model:   "models/gemini-1.5-flash", // 1.5-flash に変更
+		model:   "models/gemini-flash-latest", // 最新の安定板エイリアスに変更
 		timeout: 20 * time.Second,
 	}
 }
@@ -48,14 +48,14 @@ type geminiResponse struct {
 	} `json:"candidates"`
 }
 
-func (c *GeminiClient) Generate(ctx context.Context, in OllamaInput) (string, error) {
+func (c *GeminiClient) Generate(ctx context.Context, in OllamaInput) (string, string, error) {
 	if c.apiKey == "" {
-		return "", fmt.Errorf("gemini api key is empty")
+		return "", "", fmt.Errorf("gemini api key is empty")
 	}
 
 	prompt, err := renderPrompt(in)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// v1beta を使用し、モデル名に models/ が含まれていることを前提とする
@@ -69,41 +69,41 @@ func (c *GeminiClient) Generate(ctx context.Context, in OllamaInput) (string, er
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", err
+		return "", prompt, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return "", err
+		return "", prompt, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: c.timeout}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", prompt, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", prompt, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("gemini api error (status %d): %s", resp.StatusCode, string(body))
+		return "", prompt, fmt.Errorf("gemini api error (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	var res geminiResponse
 	if err := json.Unmarshal(body, &res); err != nil {
-		return "", err
+		return "", prompt, err
 	}
 
 	if len(res.Candidates) > 0 && len(res.Candidates[0].Content.Parts) > 0 {
-		return res.Candidates[0].Content.Parts[0].Text, nil
+		return res.Candidates[0].Content.Parts[0].Text, prompt, nil
 	}
 
-	return "", fmt.Errorf("gemini returned empty candidates")
+	return "", prompt, fmt.Errorf("gemini returned empty candidates")
 }
 
 func (c *GeminiClient) IsAvailable() bool {

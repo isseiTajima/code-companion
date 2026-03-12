@@ -24,7 +24,7 @@ func TestAnthropicGenerate_TooManyRequests_Returns429Error(t *testing.T) {
 	client.timeout = 100 * time.Millisecond
 
 	// When: Generate を呼ぶ
-	_, err := client.Generate(context.Background(), OllamaInput{})
+	_, _, err := client.Generate(context.Background(), OllamaInput{})
 
 	// Then: エラーが返り、かつ 429 ステータスに言及している
 	if err == nil {
@@ -54,7 +54,7 @@ func TestAnthropicGenerate_BadRequest_Returns400Error(t *testing.T) {
 	client.timeout = 100 * time.Millisecond
 
 	// When: Generate を呼ぶ
-	_, err := client.Generate(context.Background(), OllamaInput{})
+	_, _, err := client.Generate(context.Background(), OllamaInput{})
 
 	// Then: エラーが返る（400 エラーはフォールバック対象外）
 	if err == nil {
@@ -78,7 +78,7 @@ func TestAnthropicGenerate_ServerError_Returns500Error(t *testing.T) {
 	client.timeout = 100 * time.Millisecond
 
 	// When: Generate を呼ぶ
-	_, err := client.Generate(context.Background(), OllamaInput{})
+	_, _, err := client.Generate(context.Background(), OllamaInput{})
 
 	// Then: エラーが返る（500 エラーはフォールバック対象外）
 	if err == nil {
@@ -103,7 +103,7 @@ func TestAnthropicGenerate_429_CanBeDetected_ByInspectingErrorMessage(t *testing
 	client.timeout = 100 * time.Millisecond
 
 	// When: Generate を呼ぶ
-	_, err := client.Generate(context.Background(), OllamaInput{})
+	_, _, err := client.Generate(context.Background(), OllamaInput{})
 
 	// Then: エラーメッセージに "429" が含まれている（または http.StatusTooManyRequests の値）
 	if err == nil {

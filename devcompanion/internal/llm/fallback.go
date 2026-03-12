@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"devcompanion/internal/i18n"
+	"sakura-kodama/internal/i18n"
 )
 
 var (
@@ -51,6 +51,17 @@ const (
 	ReasonProductiveToolActivity Reason = "productive_tool_activity"
 	ReasonDocWriting            Reason = "doc_writing"
 	ReasonLongInactivity        Reason = "long_inactivity"
+	ReasonUserQuestion          Reason = "user_question"
+	ReasonQuestionAnswered      Reason = "question_answered"
+
+	// Proactive Initiatives
+	ReasonInitObservation Reason = "initiative_observation"
+	ReasonInitSupport     Reason = "initiative_support"
+	ReasonInitCuriosity   Reason = "initiative_curiosity"
+	ReasonInitMemory      Reason = "initiative_memory"
+
+	// Web browsing
+	ReasonWebBrowsing Reason = "web_browsing"
 )
 
 // FallbackSpeech はLLM呼び出し失敗時のテンプレートセリフを返す。
@@ -77,14 +88,14 @@ func FallbackSpeech(r Reason, lang string) string {
 
 	key := fmt.Sprintf("speech.fallback.%s", string(r))
 	texts := i18n.TVariant(lang, key)
-	if len(texts) > 0 {
-		rndMu.Lock()
-		idx := rnd.Intn(len(texts))
-		rndMu.Unlock()
-		return texts[idx]
+	if len(texts) == 0 || (len(texts) == 1 && texts[0] == key) {
+		return "…"
 	}
 	
-	return "…"
+	rndMu.Lock()
+	idx := rnd.Intn(len(texts))
+	rndMu.Unlock()
+	return texts[idx]
 }
 
 // isTooManyRequestsError は error が HTTP 429 (Too Many Requests) を示すかチェックする。

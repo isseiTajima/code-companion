@@ -24,7 +24,7 @@ func TestAnthropicGenerate_Success(t *testing.T) {
 	// Given: content[0].text を返すモックサーバー
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(anthropicOKResponse("  よし！  "))
+		_, _ = w.Write(anthropicOKResponse("よし！"))
 	}))
 	defer server.Close()
 
@@ -33,7 +33,7 @@ func TestAnthropicGenerate_Success(t *testing.T) {
 	client.timeout = 100 * time.Millisecond
 
 	// When: Generate を呼ぶ
-	text, err := client.Generate(context.Background(), OllamaInput{
+	text, _, err := client.Generate(context.Background(), OllamaInput{
 		State:  "Running",
 		Task:   "GenerateCode",
 		Mood:   "Focus",
@@ -70,7 +70,7 @@ func TestAnthropicGenerate_SetsRequiredHeaders(t *testing.T) {
 	client.timeout = 100 * time.Millisecond
 
 	// When: Generate を呼ぶ
-	if _, err := client.Generate(context.Background(), OllamaInput{}); err != nil {
+	if _, _, err := client.Generate(context.Background(), OllamaInput{}); err != nil {
 		t.Fatalf("want no error, got %v", err)
 	}
 
@@ -101,7 +101,7 @@ func TestAnthropicGenerate_HTTPError(t *testing.T) {
 	client.timeout = 100 * time.Millisecond
 
 	// When: Generate を呼ぶ
-	_, err := client.Generate(context.Background(), OllamaInput{})
+	_, _, err := client.Generate(context.Background(), OllamaInput{})
 
 	// Then: エラーが返る
 	if err == nil {
@@ -124,7 +124,7 @@ func TestAnthropicGenerate_EmptyContent(t *testing.T) {
 	client.timeout = 100 * time.Millisecond
 
 	// When: Generate を呼ぶ
-	_, err := client.Generate(context.Background(), OllamaInput{})
+	_, _, err := client.Generate(context.Background(), OllamaInput{})
 
 	// Then: エラーが返る（コンテンツが空）
 	if err == nil {
@@ -153,7 +153,7 @@ func TestAnthropicGenerate_Timeout(t *testing.T) {
 	client.timeout = 50 * time.Millisecond
 
 	// When: Generate を呼ぶ（タイムアウト発生）
-	_, err := client.Generate(context.Background(), OllamaInput{})
+	_, _, err := client.Generate(context.Background(), OllamaInput{})
 
 	// Then: タイムアウトエラーが返る
 	if err == nil {

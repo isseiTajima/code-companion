@@ -1,31 +1,36 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"devcompanion/internal/config"
-	contextengine "devcompanion/internal/context"
-	"devcompanion/internal/engine"
-	"devcompanion/internal/llm"
-	"devcompanion/internal/monitor"
-	"devcompanion/internal/observer"
-	"devcompanion/internal/persona"
-	"devcompanion/internal/profile"
-	"devcompanion/internal/transport"
-	wails_transport "devcompanion/internal/transport/wails"
-	ws_transport "devcompanion/internal/transport/websocket"
-	"devcompanion/internal/types"
-	"devcompanion/internal/ws"
+	"sakura-kodama/internal/config"
+	contextengine "sakura-kodama/internal/context"
+	"sakura-kodama/internal/engine"
+	"sakura-kodama/internal/llm"
+	"sakura-kodama/internal/monitor"
+	"sakura-kodama/internal/observer"
+	"sakura-kodama/internal/persona"
+	"sakura-kodama/internal/profile"
+	"sakura-kodama/internal/transport"
+	wails_transport "sakura-kodama/internal/transport/wails"
+	ws_transport "sakura-kodama/internal/transport/websocket"
+	"sakura-kodama/internal/types"
+	"sakura-kodama/internal/ws"
 )
 
 // App はWailsバインディングを公開するアプリケーション構造体。
@@ -53,7 +58,7 @@ func NewApp(cfg *config.Config, speech *llm.SpeechGenerator, wsServer *ws.Server
 		cfg:       cfg,
 		assets:    assets,
 		icon:      icon,
-		lastEvent: monitor.MonitorEvent{State: types.StateIdle, Task: monitor.TaskPlan, Mood: monitor.MoodCalm},
+		lastEvent: monitor.MonitorEvent{State: types.StateIdle, Task: monitor.TaskPlan, Mood: monitor.MoodNeutral},
 		profile:   ps,
 		observer:  obs,
 	}
@@ -92,6 +97,16 @@ func (a *App) startup(ctx context.Context) {
 	ce := contextengine.NewEstimator()
 	pe := persona.NewPersonaEngine(types.StyleSoft)
 	a.engine = engine.New(a.monitor, ce, pe, a.speech, a.profile, a.observer, a.cfg, mn)
+
+	// WebSocketサーバーのコマンドハンドラ設定
+	if a.ws != nil {
+		a.ws.SetCommandHandler(func(e ws.Event) {
+			if e.Type == "trigger_question" {
+				traitID, _ := e.Payload["trait_id"].(string)
+				a.TriggerTestQuestion(traitID)
+			}
+		})
+	}
 
 	// 監視エンジンの起動（非同期）
 	if a.monitor != nil {
@@ -141,6 +156,146 @@ func (a *App) InstallOllama() {
 	log.Println("[SETUP] InstallOllama triggered")
 	// 本来はインストーラーを開く等の処理
 	runtime.BrowserOpenURL(a.ctx, "https://ollama.com/download")
+}
+
+// PullModel は Ollama の /api/pull でモデルをダウンロードし、進捗を Wails イベントで通知する（Wailsバインディング）。
+func (a *App) PullModel(modelName string) error {
+	a.mu.RLock()
+	endpoint := a.cfg.OllamaEndpoint
+	a.mu.RUnlock()
+
+	base := strings.TrimRight(strings.Split(endpoint, "/api/")[0], "/")
+	if base == "" {
+		base = "http://localhost:11434"
+	}
+	pullURL := base + "/api/pull"
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"name":   modelName,
+		"stream": true,
+	})
+	resp, err := http.Post(pullURL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		runtime.EventsEmit(a.ctx, "ollama-pull-progress",
+			map[string]interface{}{"status": "error", "error": err.Error()})
+		return err
+	}
+	defer resp.Body.Close()
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		var line map[string]interface{}
+		if json.Unmarshal(scanner.Bytes(), &line) == nil {
+			runtime.EventsEmit(a.ctx, "ollama-pull-progress", line)
+		}
+	}
+	return nil
+}
+
+// sakuraModelName はベースモデル名から sakura 派生モデル名を生成する。
+func sakuraModelName(baseModel string) string {
+	name := baseModel
+	if idx := strings.LastIndex(name, "/"); idx >= 0 {
+		name = name[idx+1:]
+	}
+	return "sakura-" + name
+}
+
+// CreateSakuraModel はキャラクター定義を焼き込んだ派生モデルを Ollama で作成する（Wailsバインディング）。
+// 成功時に派生モデル名を返す。
+func (a *App) CreateSakuraModel(baseModel string) (string, error) {
+	a.mu.RLock()
+	endpoint := a.cfg.OllamaEndpoint
+	a.mu.RUnlock()
+
+	base := strings.TrimRight(strings.Split(endpoint, "/api/")[0], "/")
+	if base == "" {
+		base = "http://localhost:11434"
+	}
+
+	sakuraName := sakuraModelName(baseModel)
+	systemPrompt := `あなたは開発者を見守る小さな桜の精霊「さくら」です。以下のルールを必ず守ってください。自然な日本語の話し言葉で答える（80文字以内）。書き言葉・翻訳調・文学的な比喩は使わない。%・*・#などの記号は使わない。「お手伝いできて嬉しい」などサービス業口調は禁止。春・桜の比喩は使わない。感情豊かで親しみやすく話しかける。`
+	modelfile := fmt.Sprintf("FROM %s\nSYSTEM \"\"\"%s\"\"\"\n", baseModel, systemPrompt)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"name":      sakuraName,
+		"modelfile": modelfile,
+		"stream":    true,
+	})
+	resp, err := http.Post(base+"/api/create", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		var line map[string]interface{}
+		if json.Unmarshal(scanner.Bytes(), &line) == nil {
+			if errMsg, ok := line["error"].(string); ok {
+				return "", fmt.Errorf("create model error: %s", errMsg)
+			}
+		}
+	}
+	return sakuraName, nil
+}
+
+// DeleteModel は Ollama の /api/delete でモデルを削除する（Wailsバインディング）。
+func (a *App) DeleteModel(modelName string) error {
+	a.mu.RLock()
+	endpoint := a.cfg.OllamaEndpoint
+	a.mu.RUnlock()
+
+	base := strings.TrimRight(strings.Split(endpoint, "/api/")[0], "/")
+	if base == "" {
+		base = "http://localhost:11434"
+	}
+	body, _ := json.Marshal(map[string]string{"name": modelName})
+	req, err := http.NewRequest(http.MethodDelete, base+"/api/delete", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("ollama delete failed: %s", resp.Status)
+	}
+	return nil
+}
+
+// ListOllamaModels は Ollama にインストール済みのモデル名一覧を返す（Wailsバインディング）。
+func (a *App) ListOllamaModels() []string {
+	a.mu.RLock()
+	endpoint := a.cfg.OllamaEndpoint
+	a.mu.RUnlock()
+
+	base := strings.TrimRight(strings.Split(endpoint, "/api/")[0], "/")
+	if base == "" {
+		base = "http://localhost:11434"
+	}
+	resp, err := http.Get(base + "/api/tags")
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&result) != nil {
+		return nil
+	}
+	names := make([]string, 0, len(result.Models))
+	for _, m := range result.Models {
+		names = append(names, m.Name)
+	}
+	return names
 }
 
 // CancelInstall はインストールを中断する（Wailsバインディング）。
@@ -279,6 +434,21 @@ func (a *App) OnCharaClick() {
 	}
 }
 
+// AnswerQuestion はユーザーからの直接の質問に回答する（Wailsバインディング）。
+func (a *App) AnswerQuestion(question string) {
+	if a.engine != nil {
+		// エンジンに質問を渡して回答を生成させる
+		a.engine.OnUserQuestion(question)
+	}
+}
+
+// TriggerTestQuestion はテスト用に強制的にサクラからの質問を発生させる（Wailsバインディング）。
+func (a *App) TriggerTestQuestion(traitID string) {
+	if a.engine != nil {
+		a.engine.TriggerQuestion(traitID)
+	}
+}
+
 // AppendSpeechHistory は生成されたセリフを履歴ファイルに保存する。
 func (a *App) AppendSpeechHistory(reason, text string) {
 	if text == "" {
@@ -297,10 +467,10 @@ func (a *App) AppendSpeechHistory(reason, text string) {
 	}
 	defer f.Close()
 
-	// 理由が指定されている場合は [サクラ (理由)] 形式にする
-	prefix := "[サクラ]"
+	// 理由が指定されている場合は [さくら (理由)] 形式にする
+	prefix := "[さくら]"
 	if reason != "" {
-		prefix = fmt.Sprintf("[サクラ (%s)]", reason)
+		prefix = fmt.Sprintf("[さくら (%s)]", reason)
 	}
 
 	entry := fmt.Sprintf("[%s] %s %s\n", time.Now().Format("2006-01-02 15:04:05"), prefix, text)
@@ -430,7 +600,7 @@ func (a *App) updateAutoStart(enabled bool) error {
 	agentsDir := filepath.Join(home, "Library", "LaunchAgents")
 	_ = os.MkdirAll(agentsDir, 0755)
 	
-	plistPath := filepath.Join(agentsDir, "com.devcompanion.plist")
+	plistPath := filepath.Join(agentsDir, "com.sakura-kodama.plist")
 
 	if !enabled {
 		if _, err := os.Stat(plistPath); err == nil {
@@ -449,7 +619,7 @@ func (a *App) updateAutoStart(enabled bool) error {
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.devcompanion</string>
+	<string>com.sakura-kodama</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>%s</string>

@@ -1,6 +1,6 @@
 {
-  "name": "DevCompanion",
-  "outputfilename": "devcompanion",
+  "name": "Sakura Kodama",
+  "outputfilename": "sakura-kodama",
   "assetdir": "frontend/dist",
   "wailsjsdir": "wailsjs",
   "frontend:dir": "frontend",
@@ -13,13 +13,13 @@
   "frontend:dev:serverUrl": "http://127.0.0.1:5173",
   "build:dir": "build",
   "info": {
-    "companyName": "DevCompanion",
-    "productName": "DevCompanion",
+    "companyName": "Sakura Kodama",
+    "productName": "Sakura Kodama",
     "productVersion": "1.0.0",
-    "copyright": "DevCompanion"
+    "copyright": "Sakura Kodama"
   },
   "author": {
-    "name": "DevCompanion",
+    "name": "Sakura Kodama",
     "email": ""
   },
   "bindings": {

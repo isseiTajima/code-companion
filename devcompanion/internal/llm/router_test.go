@@ -20,20 +20,20 @@ type mockClient struct {
 	callCount     int
 }
 
-func (m *mockClient) Generate(ctx context.Context, in OllamaInput) (string, error) {
+func (m *mockClient) Generate(ctx context.Context, in OllamaInput) (string, string, error) {
 	m.callCount++
 
 	if m.shouldTimeout {
 		// コンテキストキャンセルをシミュレート
 		<-ctx.Done()
-		return "", ctx.Err()
+		return "", "", ctx.Err()
 	}
 
 	if m.shouldFail {
-		return "", fmt.Errorf("mock client error")
+		return "", "", fmt.Errorf("mock client error")
 	}
 
-	return m.response, nil
+	return m.response, "mock-prompt", nil
 }
 
 func (m *mockClient) IsAvailable() bool {
@@ -47,7 +47,7 @@ func TestLLMRouter_OllamaSuccess(t *testing.T) {
 	// Given: Ollama成功、Claude・ai CLI未呼び出し
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"response":"ollama success","done":true}`))
+		_, _ = w.Write([]byte(`{"message":{"content":"ollama success"},"done":true}`))
 	}))
 	defer server.Close()
 
@@ -69,7 +69,7 @@ func TestLLMRouter_OllamaSuccess(t *testing.T) {
 	}
 
 	// When: Route を呼ぶ
-	text, _, err := router.Route(context.Background(), input)
+	text, _, _, err := router.Route(context.Background(), input)
 
 	// Then: Ollama からの応答が返る
 	if err != nil {
@@ -115,7 +115,7 @@ func TestLLMRouter_OllamaFail_ClaudeSuccess(t *testing.T) {
 	}
 
 	// When: Route を呼ぶ
-	text, _, err := router.Route(context.Background(), input)
+	text, _, _, err := router.Route(context.Background(), input)
 
 	// Then: Claude からの応答が返る（Ollama スキップ）
 	if err != nil {
@@ -148,13 +148,13 @@ func TestLLMRouter_AllLayersFail_ReturnsFallback(t *testing.T) {
 	}
 
 	// When: Route を呼ぶ
-	text, _, err := router.Route(context.Background(), input)
+	text, _, _, err := router.Route(context.Background(), input)
 
 	// Then: Fallback テキストが返る
 	if err != nil {
 		t.Fatalf("want no error, got %v", err)
 	}
-	expectedFallback := FallbackSpeech(ReasonThinkingTick)
+	expectedFallback := FallbackSpeech(ReasonThinkingTick, "ja")
 	if text != expectedFallback {
 		t.Fatalf("want fallback %q, got %q", expectedFallback, text)
 	}
@@ -181,7 +181,7 @@ func TestLLMRouter_OllamaTimeout_NextLayer(t *testing.T) {
 	}
 
 	// When: Route を呼ぶ
-	text, _, err := router.Route(context.Background(), input)
+	text, _, _, err := router.Route(context.Background(), input)
 
 	// Then: Claude からの応答が返る
 	if err != nil {
@@ -214,7 +214,7 @@ func TestLLMRouter_EmptyResponse_NextLayer(t *testing.T) {
 	}
 
 	// When: Route を呼ぶ
-	text, _, err := router.Route(context.Background(), input)
+	text, _, _, err := router.Route(context.Background(), input)
 
 	// Then: Claude からの応答が返る（空レスポンスはエラー扱い）
 	if err != nil {
@@ -256,7 +256,7 @@ func TestLLMRouter_ClaudeEmptyContent_NextLayer(t *testing.T) {
 	}
 
 	// When: Route を呼ぶ
-	text, _, err := router.Route(context.Background(), input)
+	text, _, _, err := router.Route(context.Background(), input)
 
 	// Then: ai CLI からの応答が返る
 	if err != nil {
@@ -310,7 +310,7 @@ func TestLLMRouter_RoutingOrder_OllamaClaudeAICLI(t *testing.T) {
 	}
 
 	// When: Route を呼ぶ
-	_, _, _ = router.Route(context.Background(), input)
+	_, _, _, _ = router.Route(context.Background(), input)
 
 	// Then: 全層が呼び出される（順序: Ollama → Claude → ai CLI）
 	if ollama.callCount != 1 {
@@ -351,7 +351,7 @@ func TestLLMRouter_ContextCancellation_TerminatesRouting(t *testing.T) {
 	}
 
 	// When: キャンセル済みコンテキストで Route を呼ぶ
-	_, _, err := router.Route(ctx, input)
+	_, _, _, err := router.Route(ctx, input)
 
 	// Then: エラーが返る（コンテキストキャンセル）
 	if err == nil {

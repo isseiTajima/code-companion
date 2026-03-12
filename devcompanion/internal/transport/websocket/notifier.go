@@ -2,8 +2,8 @@ package websocket
 
 import (
 	"encoding/json"
-	"devcompanion/internal/types"
-	"devcompanion/internal/ws"
+	"sakura-kodama/internal/types"
+	"sakura-kodama/internal/ws"
 )
 
 // WebSocketNotifier は WebSocket を介して通知を行う。

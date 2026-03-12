@@ -1,10 +1,10 @@
 package persona
 
 import (
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 )
 
-// CharacterCore は DevCompanion の基本人格（後輩）。
+// CharacterCore は Sakura Kodama の基本人格（後輩）。
 type CharacterCore struct {
 	Name string
 	Tone string
@@ -19,7 +19,7 @@ type PersonaEngine struct {
 func NewPersonaEngine(style types.PersonaStyle) *PersonaEngine {
 	return &PersonaEngine{
 		Core: CharacterCore{
-			Name: "サクラ",
+			Name: "さくら",
 			Tone: "フレンドリーな後輩",
 		},
 		Style: style,
@@ -29,12 +29,12 @@ func NewPersonaEngine(style types.PersonaStyle) *PersonaEngine {
 // GetPromptModifiers はスタイルに応じたプロンプト指示を返す。
 func (p *PersonaEngine) GetPromptModifiers() string {
 	switch p.Style {
-	case types.StyleSoft:
-		return "優しく見守る、落ち着いたトーンで話してください。"
-	case types.StyleEnergetic:
-		return "元気いっぱいに、リアクション多めで話してください。"
-	case types.StyleStrict:
-		return "少しプレッシャーをかけるような、直接的な言い方で話してください。"
+	case types.StyleSoft, types.StyleCute:
+		return "優しく見守る、控えめで可愛いトーンで話してください。"
+	case types.StyleEnergetic, types.StyleGenki:
+		return "元気いっぱいに、ポジティブで明るいトーンで話してください。"
+	case types.StyleStrict, types.StyleTsukime:
+		return "少し生意気で直接的な、きつめのトーンで話してください。"
 	default:
 		return "丁寧かつ明るい態度で接してください。"
 	}

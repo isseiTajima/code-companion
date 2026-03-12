@@ -5,10 +5,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"devcompanion/internal/config"
-	"devcompanion/internal/monitor"
-	"devcompanion/internal/profile"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/config"
+	"sakura-kodama/internal/monitor"
+	"sakura-kodama/internal/profile"
+	"sakura-kodama/internal/types"
 )
 
 func TestSpeechGenerator_EventContext_BuildSuccess(t *testing.T) {
@@ -33,7 +33,7 @@ func TestSpeechGenerator_EventContext_BuildSuccess(t *testing.T) {
 		State: types.StateCoding,
 	}
 
-	_ = sg.Generate(event, cfg, ReasonSuccess, profile.DevProfile{})
+	_, _, _ = sg.Generate(event, cfg, ReasonSuccess, profile.DevProfile{}, "")
 }
 
 func TestSpeechGenerator_EventContext_BuildFailed(t *testing.T) {
@@ -58,5 +58,5 @@ func TestSpeechGenerator_EventContext_BuildFailed(t *testing.T) {
 		State: types.StateStuck,
 	}
 
-	_ = sg.Generate(event, cfg, ReasonFail, profile.DevProfile{})
+	_, _, _ = sg.Generate(event, cfg, ReasonFail, profile.DevProfile{}, "")
 }

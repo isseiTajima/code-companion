@@ -3,6 +3,7 @@ package ws
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -15,9 +16,10 @@ const broadcastTimeout = 1 * time.Second
 
 // Server はWebSocketサーバーを管理する。
 type Server struct {
-	clients  map[*websocket.Conn]struct{}
-	mu       sync.RWMutex
-	upgrader websocket.Upgrader
+	clients        map[*websocket.Conn]struct{}
+	mu             sync.RWMutex
+	upgrader       websocket.Upgrader
+	commandHandler func(e Event)
 }
 
 // NewServer は Server を初期化する。
@@ -31,11 +33,43 @@ func NewServer() *Server {
 	}
 }
 
+// SetCommandHandler は外部からのコマンドを受け取るハンドラを設定する。
+func (s *Server) SetCommandHandler(handler func(e Event)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.commandHandler = handler
+}
+
 // Start はWebSocketサーバーをポートWSPortで起動する。
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleWS)
-	return http.ListenAndServe(fmt.Sprintf(":%d", WSPort), mux)
+	mux.HandleFunc("/trigger", s.handleTrigger) // HTTPエンドポイント追加
+	
+	addr := fmt.Sprintf("127.0.0.1:%d", WSPort)
+	log.Printf("[WS] Server starting on %s", addr)
+	return http.ListenAndServe(addr, mux)
+}
+
+// handleTrigger はHTTP経由での強制発火を受け付ける。
+func (s *Server) handleTrigger(w http.ResponseWriter, r *http.Request) {
+	traitID := r.URL.Query().Get("trait_id")
+	
+	s.mu.RLock()
+	handler := s.commandHandler
+	s.mu.RUnlock()
+
+	if handler != nil {
+		handler(Event{
+			Type: "trigger_question",
+			Payload: map[string]interface{}{
+				"trait_id": traitID,
+			},
+		})
+		fmt.Fprintf(w, "Triggered question for: %s\n", traitID)
+	} else {
+		http.Error(w, "Handler not initialized", http.StatusInternalServerError)
+	}
 }
 
 // Broadcast はすべての接続クライアントにイベントを送信する。
@@ -74,10 +108,21 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.clients[conn] = struct{}{}
 	s.mu.Unlock()
 
-	// クライアント切断まで読み続ける
+	// クライアントからのメッセージを読み取って処理
 	for {
-		if _, _, err := conn.ReadMessage(); err != nil {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
 			break
+		}
+
+		var ev Event
+		if err := json.Unmarshal(message, &ev); err == nil {
+			s.mu.RLock()
+			handler := s.commandHandler
+			s.mu.RUnlock()
+			if handler != nil {
+				handler(ev)
+			}
 		}
 	}
 

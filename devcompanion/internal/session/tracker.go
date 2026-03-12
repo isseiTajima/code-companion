@@ -3,7 +3,7 @@ package session
 import (
 	"time"
 
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 )
 
 // Tracker は行動の履歴からセッション状態を管理する。
@@ -16,14 +16,14 @@ func NewTracker() *Tracker {
 	return &Tracker{
 		state: types.SessionState{
 			Mode:      types.ModeIdle,
-			StartTime: time.Now(),
+			StartTime: types.TimeToStr(time.Now()),
 		},
 	}
 }
 
 // Update は現在の行動に基づいてセッション状態を更新する。
 func (t *Tracker) Update(b types.Behavior, now time.Time) types.SessionState {
-	t.state.LastActivity = now
+	t.state.LastActivity = types.TimeToStr(now)
 
 	// モード推論ロジック
 	switch b.Type {
@@ -41,6 +41,9 @@ func (t *Tracker) Update(b types.Behavior, now time.Time) types.SessionState {
 	case types.BehaviorDebugging:
 		t.state.Mode = types.ModeStruggling
 		t.state.FocusLevel = 0.9 // デバッグ中は集中力は高い
+	case types.BehaviorResearching:
+		t.state.Mode = types.ModeCasualWork
+		t.state.FocusLevel = 0.6
 	case types.BehaviorBreak, types.BehaviorProcrastinating:
 		t.state.Mode = types.ModeOnBreak
 		t.state.FocusLevel = 0.1

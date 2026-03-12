@@ -1,10 +1,10 @@
-# DevCompanion
+# Sakura Kodama
 
-DevCompanion is a desktop character that supports your development workflow.
+Sakura Kodama is a small AI spirit that quietly watches over your work.
 
 ## Architecture
 
-DevCompanion adopts a 5-layer event pipeline architecture to robustly detect and respond to developer activities.
+Sakura Kodama adopts a 5-layer event pipeline architecture to robustly detect and respond to developer activities.
 
 ```mermaid
 graph TD
@@ -22,7 +22,7 @@ graph TD
 
 ### Reliability & Observability
 
-*   **Signal Recorder**: Records all incoming signals to `.devcompanion/signals/*.jsonl` for debugging.
+*   **Signal Recorder**: Records all incoming signals to `.sakura-kodama/signals/*.jsonl` for debugging.
 *   **Replay Engine**: Replays recorded signals to reproduce bugs or verify logic.
 *   **Deterministic Mode**: LLM responses can be seeded for stable testing.
 
@@ -42,5 +42,5 @@ go test ./internal/...
 go test ./internal/monitor -v -run TestLongRunningStability
 
 # Debug viewer
-go run cmd/contextviewer/main.go -f ~/.devcompanion/signals/latest.jsonl
+go run cmd/contextviewer/main.go -f ~/.sakura-kodama/signals/latest.jsonl
 ```

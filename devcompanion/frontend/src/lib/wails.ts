@@ -2,11 +2,16 @@ import {
   LoadConfig as nativeLoadConfig,
   SaveConfig as nativeSaveConfig,
   OnCharaClick as nativeOnCharaClick,
+  AnswerQuestion as nativeAnswerQuestion,
   InstallOllama as nativeInstallOllama,
   CancelInstall as nativeCancelInstall,
   DetectSetupStatus as nativeDetectSetupStatus,
   CompleteSetup as nativeCompleteSetup,
   ExpandForOnboarding as nativeExpandForOnboarding,
+  PullModel as nativePullModel,
+  ListOllamaModels as nativeListOllamaModels,
+  DeleteModel as nativeDeleteModel,
+  CreateSakuraModel as nativeCreateSakuraModel,
 } from 'wailsjs/go/main/App'
 
 type RuntimeAwareWindow = Window & {
@@ -37,10 +42,11 @@ export type AppConfig = {
   auto_start: boolean
   speech_frequency: number
   window_position: string
+  language: string
 }
 
 const DEFAULT_NAME = 'サクラ'
-const DEFAULT_MODEL = 'gemma3:4b'
+const DEFAULT_MODEL = 'qwen2.5:3b'
 const DEFAULT_OLLAMA_ENDPOINT = 'http://localhost:11434/api/generate'
 const CLAUDE_LOG_SEGMENTS = ['Library', 'Logs', 'Claude', 'Claude Code.log'] as const
 
@@ -64,6 +70,7 @@ export const defaultConfig: AppConfig = {
   auto_start: true,
   speech_frequency: 2,
   window_position: "top-right",
+  language: "ja",
 }
 
 const FALLBACK_STORAGE_KEY = 'wails:fallbackConfig'
@@ -158,6 +165,14 @@ export function onCharaClick(): Promise<unknown> | void {
   return nativeOnCharaClick()
 }
 
+export function answerQuestion(question: string): Promise<void> | void {
+  if (!hasRuntime()) {
+    console.log('answerQuestion triggered (no runtime):', question)
+    return Promise.resolve()
+  }
+  return nativeAnswerQuestion(question)
+}
+
 export async function InstallOllama(): Promise<void> {
   if (!hasRuntime()) {
     console.log('InstallOllama triggered (no runtime)')
@@ -198,6 +213,48 @@ export async function ExpandForOnboarding(): Promise<void> {
     return
   }
   await nativeExpandForOnboarding()
+}
+
+export async function createSakuraModel(baseModel: string): Promise<string> {
+  if (!hasRuntime()) return ''
+  try {
+    return await nativeCreateSakuraModel(baseModel)
+  } catch {
+    return ''
+  }
+}
+
+export async function deleteModel(modelName: string): Promise<void> {
+  if (!hasRuntime()) return
+  await nativeDeleteModel(modelName)
+}
+
+export async function listOllamaModels(): Promise<string[]> {
+  if (!hasRuntime()) return []
+  return nativeListOllamaModels()
+}
+
+export async function pullModel(modelName: string): Promise<void> {
+  if (!hasRuntime()) {
+    console.log('pullModel triggered (no runtime):', modelName)
+    return
+  }
+  await nativePullModel(modelName)
+}
+
+export type PullProgress = {
+  status: string
+  total?: number
+  completed?: number
+  error?: string
+}
+
+export function onPullProgress(cb: (p: PullProgress) => void) {
+  if (typeof window !== 'undefined' && (window as any).runtime) {
+    const r = (window as any).runtime
+    r.EventsOff('ollama-pull-progress')
+    r.EventsOn('ollama-pull-progress', cb)
+  }
 }
 
 export function onOpenSettings(cb: () => void) {

@@ -3,19 +3,20 @@ package monitor
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
-	"devcompanion/internal/agent"
-	"devcompanion/internal/behavior"
-	"devcompanion/internal/config"
-	"devcompanion/internal/context"
-	"devcompanion/internal/debug/recorder"
-	"devcompanion/internal/metrics"
-	"devcompanion/internal/pipeline"
-	"devcompanion/internal/plugin"
-	"devcompanion/internal/sensor"
-	"devcompanion/internal/session"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/agent"
+	"sakura-kodama/internal/behavior"
+	"sakura-kodama/internal/config"
+	"sakura-kodama/internal/context"
+	"sakura-kodama/internal/debug/recorder"
+	"sakura-kodama/internal/metrics"
+	"sakura-kodama/internal/pipeline"
+	"sakura-kodama/internal/plugin"
+	"sakura-kodama/internal/sensor"
+	"sakura-kodama/internal/session"
+	"sakura-kodama/internal/types"
 )
 
 // MonitorEvent はパイプラインの最終出力を表す。
@@ -71,6 +72,7 @@ func New(cfg *config.AppConfig, watchDir string) (*Monitor, error) {
 	// センサーの登録
 	m.sensors = append(m.sensors, sensor.NewFSSensor(watchDir))
 	m.sensors = append(m.sensors, sensor.NewProcessSensor([]string{"claude", "cursor", "vscode", "code", "iterm"}, 2*time.Second))
+	m.sensors = append(m.sensors, sensor.NewWebSensor(5*time.Second))
 
 	if cfg != nil {
 		m.contextEngine.SetWeights(cfg.SignalWeights)
@@ -88,7 +90,7 @@ func (m *Monitor) Run(ctx context.Context) {
 		m.InjectSignal(types.Signal{
 			Type:      types.SigIdleStart,
 			Source:    types.SourceSystem,
-			Timestamp: time.Now(),
+			Timestamp: types.TimeToStr(time.Now()),
 		})
 	}()
 
@@ -100,6 +102,7 @@ func (m *Monitor) Run(ctx context.Context) {
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+
 
 	for {
 		select {
@@ -125,19 +128,18 @@ func (m *Monitor) Run(ctx context.Context) {
 					Context: types.ContextInfo{
 						State:      decision.State,
 						Confidence: decision.Confidence,
-						LastSignal: now,
+						LastSignal: types.TimeToStr(now),
 					},
 					Decision: decision,
+					Mood:     InferMood(MonitorEvent{State: decision.State, Behavior: currentBehavior, Session: currentSession}),
 				}
 			})
 
 		case sig := <-m.signals:
 			log.Printf("[DEBUG] Monitor received signal: %+v", sig)
 			pipeline.SafeExecute("MonitorLoop", func() {
-				now := sig.Timestamp
-				if now.IsZero() {
-					now = time.Now()
-				}
+				// parse sig.Timestamp if needed, but for now we just use it as string or current time
+				now := time.Now() 
 
 				metrics.IncrementSignalsReceived()
 				m.recorder.Record(sig)
@@ -158,7 +160,13 @@ func (m *Monitor) Run(ctx context.Context) {
 				currentBehavior := m.behaviorInferrer.Infer()
 				currentSession := m.sessionTracker.Update(currentBehavior, now)
 
-				m.events <- MonitorEvent{
+				details := sig.Value
+				if sig.Type == types.SigWebNavigated {
+					// sig.Message is "browsing: {title}" — extract the page title
+					details = strings.TrimPrefix(sig.Message, "browsing: ")
+				}
+
+				ev := MonitorEvent{
 					State:    decision.State,
 					Event:    highLevelEvent,
 					Behavior: currentBehavior,
@@ -166,11 +174,13 @@ func (m *Monitor) Run(ctx context.Context) {
 					Context: types.ContextInfo{
 						State:      decision.State,
 						Confidence: decision.Confidence,
-						LastSignal: now,
+						LastSignal: types.TimeToStr(now),
 					},
 					Decision: decision,
-					Details:  sig.Value,
+					Details:  details,
 				}
+				ev.Mood = InferMood(ev)
+				m.events <- ev
 			})
 		}
 	}
@@ -206,6 +216,8 @@ func (m *Monitor) classifySignal(sig types.Signal) types.HighLevelEvent {
 			return types.EventGitActivity
 		}
 		return types.EventDevEditing
+	case types.SigWebNavigated:
+		return types.EventWebBrowsing
 	}
 	return ""
 }

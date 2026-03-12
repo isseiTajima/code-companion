@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/shirou/gopsutil/v3/process"
@@ -257,7 +257,7 @@ func (d *Detector) recordSignal(name string) {
 		Source:    source,
 		Value:     name,
 		Message:   msg,
-		Timestamp: time.Now(),
+		Timestamp: types.TimeToStr(time.Now()),
 	}:
 	default:
 	}
@@ -386,7 +386,7 @@ func (d *Detector) readFile(lp string) {
 			Source:    types.SourceAgent,
 			Value:     lp,
 			Message:   line,
-			Timestamp: time.Now(),
+			Timestamp: types.TimeToStr(time.Now()),
 		}:
 		default:
 		}

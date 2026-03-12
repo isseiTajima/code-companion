@@ -10,10 +10,10 @@ for iteration in {1..5}; do
   echo "[$(date '+%H:%M:%S')] go test ./..." >> "$LOG_PATH"
   sleep 2.0
   if (( iteration % 2 == 0 )); then
-    echo "[$(date '+%H:%M:%S')] FAIL	devcompanion/internal/monitor 0.${iteration}s" >> "$LOG_PATH"
+    echo "[$(date '+%H:%M:%S')] FAIL	sakura-kodama/internal/monitor 0.${iteration}s" >> "$LOG_PATH"
     echo "[$(date '+%H:%M:%S')] exit code: 1" >> "$LOG_PATH"
   else
-    echo "[$(date '+%H:%M:%S')] ok	devcompanion/internal/monitor" >> "$LOG_PATH"
+    echo "[$(date '+%H:%M:%S')] ok	sakura-kodama/internal/monitor" >> "$LOG_PATH"
     echo "[$(date '+%H:%M:%S')] exit code: 0" >> "$LOG_PATH"
   fi
   sleep 10.0

@@ -18,8 +18,8 @@ func TestLoadConfig_ReturnsDefaultWhenNoFile(t *testing.T) {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
 
-	if cfg.Name != "サクラ" {
-		t.Errorf("expected default name サクラ, got %s", cfg.Name)
+	if cfg.Name != "さくら" {
+		t.Errorf("expected default name さくら, got %s", cfg.Name)
 	}
 }
 

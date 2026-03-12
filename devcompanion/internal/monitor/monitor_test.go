@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"devcompanion/internal/config"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/config"
+	"sakura-kodama/internal/types"
 )
 
 func TestMonitor_Pipeline(t *testing.T) {
@@ -22,7 +22,7 @@ func TestMonitor_Pipeline(t *testing.T) {
 	sig := types.Signal{
 		Type:      types.SigGitCommit,
 		Source:    types.SourceGit,
-		Timestamp: time.Now(),
+		Timestamp: types.TimeToStr(time.Now()),
 	}
 	m.signals <- sig
 	m.signals <- sig

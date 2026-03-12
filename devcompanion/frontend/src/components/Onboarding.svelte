@@ -13,13 +13,20 @@
   let { onClose = () => {}, currentSpeech = '' } = $props();
   const dispatch = createEventDispatcher()
 
-  type Step = 'welcome' | 'ask_name' | 'detect' | 'ask_method' | 'confirm_brew' | 'input_claude' | 'installing' | 'finish'
+  type Step = 'welcome' | 'ask_name' | 'detect' | 'ask_method' | 'select_model' | 'confirm_brew' | 'input_claude' | 'installing' | 'finish'
   let currentStep = $state<Step>('welcome')
 
   let setupStatus = $state({ is_first_run: true, detected_backends: [] as string[], has_claude_key: false, has_brew: false })
   let config = $state<AppConfig | null>(null)
   let claudeKey = $state('')
   let userName = $state('')
+  // モデル選択後の次アクション（install or finish）
+  let afterModelStep = $state<'install' | 'finish'>('install')
+
+  const MODELS = [
+    { id: 'qwen2.5:4b', label: 'Standard (recommended)', size: 'Qwen 2.5 4B', vram: '~3GB' },
+    { id: 'qwen2.5:7b', label: 'High quality',           size: 'Qwen 2.5 7B', vram: '~5GB' },
+  ]
 
   async function init() {
     try {
@@ -57,17 +64,39 @@
   async function useDetected(method: string) {
     if (!config) return
     config.llm_backend = method
+    if (method === 'ollama') {
+      // Ollama検出済みの場合もモデルを選ばせる
+      afterModelStep = 'finish'
+      currentStep = 'select_model'
+    } else {
+      await saveConfig(config)
+      currentStep = 'finish'
+    }
+  }
+
+  async function selectModel(modelId: string) {
+    if (!config) return
+    config.model = modelId
     await saveConfig(config)
-    currentStep = 'finish'
+    if (afterModelStep === 'finish') {
+      currentStep = 'finish'
+    } else {
+      // インストールへ
+      requestInstall()
+    }
   }
 
   function requestInstall() {
-    // brew がない場合は確認ステップを挟む
     if (!setupStatus.has_brew) {
       currentStep = 'confirm_brew'
     } else {
       startInstall()
     }
+  }
+
+  function goToModelSelect() {
+    afterModelStep = 'install'
+    currentStep = 'select_model'
   }
 
   async function startInstall() {
@@ -102,32 +131,32 @@
 
   <div class="content">
     {#if currentStep === 'welcome'}
-      <p>はじめまして！サクラだよ。<br/>一緒に開発を楽しもうね！</p>
+      <p>はじめまして！サクラです。<br/>一緒に開発を楽しみましょう！</p>
       <div class="loading-dots"><span>.</span><span>.</span><span>.</span></div>
-    
+
     {:else if currentStep === 'ask_name'}
-      <p>あなたのことをなんて呼べばいいかな？</p>
+      <p>あなたのことをなんと呼べばいいですか？</p>
       <input type="text" bind:value={userName} placeholder="ご主人様" />
-      <button class="primary" disabled={!userName} onclick={nextAfterName}>これで呼んで！</button>
+      <button class="primary" disabled={!userName} onclick={nextAfterName}>これで呼んでください！</button>
 
     {:else if currentStep === 'detect'}
-      <p>お、あなたの環境を調べたら...<br/>
+      <p>あなたの環境を調べたら...<br/>
         {#if setupStatus.detected_backends.includes('ollama')}
-          <b>Ollama</b> が見つかったよ！
+          <b>Ollama</b> が見つかりました！
         {:else if setupStatus.detected_backends.includes('gemini')}
-          <b>Gemini (ai)</b> が見つかったよ！
+          <b>Gemini (ai)</b> が見つかりました！
         {/if}
-        これを使って、サクラと<br/>お喋りできるようにしてもいいかな？
+        これを使って、サクラと<br/>お喋りできるようにしますか？
       </p>
       <div class="buttons">
-        <button class="primary" onclick={() => useDetected(setupStatus.detected_backends[0])}>うん、お願い！</button>
-        <button class="secondary" onclick={() => currentStep = 'ask_method'}>他のを選びたい</button>
+        <button class="primary" onclick={() => useDetected(setupStatus.detected_backends[0])}>はい、お願いします！</button>
+        <button class="secondary" onclick={() => currentStep = 'ask_method'}>他のを選びたいです</button>
       </div>
 
     {:else if currentStep === 'ask_method'}
-      <p>サクラがあなたとお喋りするための<br/><b>「力の源（LLM）」</b>を選んでね！</p>
+      <p>サクラがあなたとお喋りするための<br/><b>「力の源（LLM）」</b>を選んでください！</p>
       <div class="buttons-grid">
-        <button class="choice" onclick={requestInstall}>
+        <button class="choice" onclick={goToModelSelect}>
           <span class="icon">🏠</span>
           <span class="label">ローカル (Ollama)</span>
           <span class="sub">無料でプライバシーも安心</span>
@@ -135,25 +164,38 @@
         <button class="choice" onclick={() => currentStep = 'input_claude'}>
           <span class="icon">☁️</span>
           <span class="label">クラウド (Claude API)</span>
-          <span class="sub">一番賢いサクラになるよ</span>
+          <span class="sub">一番賢いサクラになります</span>
         </button>
         <button class="choice" onclick={() => useDetected('router')}>
           <span class="icon">✨</span>
           <span class="label">おまかせ</span>
-          <span class="sub">あるものを自動で使うよ</span>
+          <span class="sub">あるものを自動で使います</span>
         </button>
       </div>
 
+    {:else if currentStep === 'select_model'}
+      <p>使うモデルを選んでください</p>
+      <div class="model-list">
+        {#each MODELS as m}
+          <button class="model-card" onclick={() => selectModel(m.id)}>
+            <span class="model-badge">🌸 {m.label}</span>
+            <span class="model-name">{m.size}</span>
+            <span class="model-size">{m.vram}</span>
+          </button>
+        {/each}
+      </div>
+      <button class="secondary back-btn" onclick={() => currentStep = afterModelStep === 'finish' ? 'detect' : 'ask_method'}>戻る</button>
+
     {:else if currentStep === 'confirm_brew'}
-      <p>Homebrew が見つからなかったよ。<br/>インストールに必要だから、先に入れてもいい？</p>
+      <p>Homebrew が見つかりませんでした。<br/>インストールに必要なため、先に入れてもいいですか？</p>
       <div class="buttons">
         <button class="primary" onclick={startInstall}>このまま続ける（zip）</button>
         <button class="secondary" onclick={() => currentStep = 'ask_method'}>戻る</button>
       </div>
-      <p style="font-size: 10px; color: #999; margin-top: 8px;">Homebrew があると安全・確実だよ。<br/>brew.sh から入れてから再挑戦もアリ！</p>
+      <p style="font-size: 10px; color: #999; margin-top: 8px;">Homebrew があると安全・確実です。<br/>brew.sh から入れてから再挑戦もできます！</p>
 
     {:else if currentStep === 'input_claude'}
-      <p>Claude の API キーを教えてね！</p>
+      <p>Claude の API キーを教えてください！</p>
       <input type="password" bind:value={claudeKey} placeholder="sk-ant-..." />
       <div class="buttons">
         <button class="primary" disabled={!claudeKey} onclick={saveClaudeKey}>保存する</button>
@@ -161,16 +203,16 @@
       </div>
 
     {:else if currentStep === 'installing'}
-      <p>今、一生懸命準備してるよ！<br/>{currentSpeech.replace('[INSTALL_COMPLETE]', '').replace('[INSTALL_ERROR]', '') || '準備中...'}</p>
+      <p>今、一生懸命準備しています！<br/>{currentSpeech.replace('[INSTALL_COMPLETE]', '').replace('[INSTALL_ERROR]', '') || '準備中...'}</p>
       <div class="progress-bar"><div class="fill"></div></div>
       {#if currentSpeech.includes('[INSTALL_ERROR]')}
         <div class="error-tips">
           <p><b>うまくいかない時は...</b></p>
           <ul>
-            <li>Ollamaを一度終了して再起動してみてね</li>
-            <li><a href="https://ollama.com" target="_blank">ollama.com</a> から手動で入れると確実だよ</li>
-            <li>Macなら <code>brew install --cask ollama</code> でも入るよ</li>
-            <li>ネットが不安定だったり、容量不足かも？</li>
+            <li>Ollamaを一度終了して再起動してみてください</li>
+            <li><a href="https://ollama.com" target="_blank">ollama.com</a> から手動でインストールも確実です</li>
+            <li>Macなら <code>brew install --cask ollama</code> でも入ります</li>
+            <li>ネットが不安定か、容量不足かもしれません</li>
           </ul>
         </div>
         <button class="primary" onclick={() => { currentStep = 'ask_method' }}>やり直す</button>
@@ -178,8 +220,9 @@
         <button class="cancel-btn" onclick={async () => { await CancelInstall(); currentStep = 'ask_method' }}>中止する</button>
       {/if}
 
-    {:else if currentStep === 'finish'}      <p>やったー！準備完了だよ！<br/>これからあなたの開発を全力で応援するね！</p>
-      <button class="primary" onclick={finish}>さっそくはじめる！</button>
+    {:else if currentStep === 'finish'}
+      <p>準備完了です！<br/>これからあなたの開発を全力で応援します！</p>
+      <button class="primary" onclick={finish}>さっそく始める！</button>
     {/if}
   </div>
 </div>
@@ -214,4 +257,12 @@
   .error-tips ul { margin: 0; padding-left: 16px; font-size: 9px; color: #666; }
   .error-tips li { margin-bottom: 2px; }
   .error-tips a { color: #e91e63; text-decoration: underline; }
-  </style>
+  /* モデル選択 */
+  .model-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+  .model-card { background: white; border: 1.5px solid #eee; border-radius: 10px; display: flex; flex-direction: column; align-items: center; padding: 10px 8px; gap: 2px; cursor: pointer; transition: all 0.2s; }
+  .model-card:hover { border-color: #e91e63; background: #fff0f5; }
+  .model-badge { font-size: 10px; font-weight: bold; color: #e91e63; }
+  .model-name { font-size: 12px; font-weight: bold; color: #333; }
+  .model-size { font-size: 10px; color: #999; }
+  .back-btn { width: 100%; font-size: 10px; font-weight: normal; }
+</style>

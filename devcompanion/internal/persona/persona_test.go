@@ -2,7 +2,7 @@ package persona
 
 import (
 	"testing"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 )
 
 func TestPersonaEngine_GetPromptModifiers(t *testing.T) {
@@ -12,7 +12,7 @@ func TestPersonaEngine_GetPromptModifiers(t *testing.T) {
 	}{
 		{types.StyleSoft, "優しく"},
 		{types.StyleEnergetic, "元気"},
-		{types.StyleStrict, "プレッシャー"},
+		{types.StyleStrict, "直接的"},
 	}
 
 	for _, tt := range tests {

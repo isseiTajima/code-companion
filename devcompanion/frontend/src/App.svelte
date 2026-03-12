@@ -9,6 +9,7 @@
     loadConfig,
     type AppConfig,
     onCharaClick,
+    answerQuestion,
     DetectSetupStatus,
     ExpandForOnboarding,
     SetClickThrough,
@@ -28,11 +29,15 @@
   let reconnectDelay = 1000
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
+  // 質問データ管理
+  let currentQuestion = $state(null as any)
+
   let cfg: AppConfig = $state({ ...defaultConfig })
 
   // OSレベルのクリック透過制御
   $effect(() => {
-    const isModalOpen = showSettings || showOnboarding || isHoveringSettings
+    // 質問表示中またはモーダル表示時はクリックを有効にする
+    const isModalOpen = showSettings || showOnboarding || isHoveringSettings || !!currentQuestion
     const ghostMode = !isModalOpen
     SetClickThrough(ghostMode)
     document.body.dataset.ghostMode = String(ghostMode)
@@ -53,11 +58,18 @@
   }
 
   function updateUI(e: any) {
+    if (e.type === "question_event") {
+      currentQuestion = e.payload
+      isTalking = true
+      return
+    }
+
     appStatus = e.state
     appMood = e.mood
     if (e.speech) {
       speechMessage = { id: ++speechSeq, text: e.speech }
       usingFallback = e.using_fallback
+      currentQuestion = null // 通常のセリフが来たら質問を消す
       if (e.profile) {
         cfg.name = e.profile.name
         cfg.tone = e.profile.tone
@@ -70,7 +82,12 @@
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        updateUI(data)
+        // WebSocket経由のイベント形式を統一
+        if (data.state) {
+           updateUI(data)
+        } else if (data.question) {
+           updateUI({ type: "question_event", payload: data })
+        }
       } catch (err) {
         console.error('Failed to parse WS message', err)
       }
@@ -113,19 +130,24 @@
     onCharaClick()
   }
 
+  function handleAnswer(traitID: string, index: number, text: string) {
+    answerQuestion(traitID, index, text)
+    currentQuestion = null
+  }
+
   onMount(async () => {
     await refreshConfig()
 
     if ((window as any).runtime) {
+      console.log('Running in Wails mode')
       const r = (window as any).runtime
-      const eventHandler = (payload: any) => {
-        updateUI(payload)
-      }
-      r.EventsOn('monitor_event', eventHandler)
-      r.EventsOn('observation_event', eventHandler)
-      r.EventsOn('greeting_event', eventHandler)
-      r.EventsOn('click_event', eventHandler)
+      r.EventsOn('monitor_event', updateUI)
+      r.EventsOn('observation_event', updateUI)
+      r.EventsOn('greeting_event', updateUI)
+      r.EventsOn('click_event', updateUI)
+      r.EventsOn('question_event', (payload: any) => updateUI({ type: "question_event", payload }))
     } else {
+      console.log('Running in Browser/Server mode, connecting WebSocket')
       connectWebSocket()
     }
 
@@ -144,18 +166,25 @@
     cleanupSocket()
   })
 
-  // 右側に固定するためのロジック
+  const isRightSide = $derived(cfg.window_position?.endsWith('right'))
   const isTopSide = $derived(cfg.window_position?.startsWith('top'))
 </script>
 
 <main>
-  <!-- 右側にキャラを固定し、左向きに反転。吹き出しはその左に密着。 -->
   <div class="chara-container" class:pos-top={isTopSide} class:pos-bottom={!isTopSide}>
-    <div class="balloon-positioner">
-      <Balloon bind:visible={isTalking} message={speechMessage} scale={cfg.scale} {usingFallback} position={cfg.window_position} />
+    <div class="balloon-positioner" style="pointer-events: {currentQuestion ? 'auto' : 'none'}">
+      <Balloon
+        bind:visible={isTalking} 
+        message={speechMessage} 
+        scale={cfg.scale} 
+        {usingFallback} 
+        position={cfg.window_position} 
+        question={currentQuestion}
+        onanswer={handleAnswer}
+      />
     </div>
     
-    <div class="chara-flip-wrapper" style="pointer-events: {(showSettings || showOnboarding) ? 'auto' : 'none'};">
+    <div class="chara-flip-wrapper" style="transform: scaleX({isRightSide ? -1 : 1}); pointer-events: {(showSettings || showOnboarding || !!currentQuestion) ? 'auto' : 'none'};">
       <Chara 
         status={appStatus} 
         mood={appMood} 
@@ -212,9 +241,10 @@
     width: 100%;
     height: 100%;
     box-sizing: border-box;
-    padding: 0;
-    justify-content: flex-end; /* 右端に寄せる */
-    flex-direction: row; /* [Balloon][Chara] の順 */
+    /* 浮遊アニメーションの可動域(10px)を考慮してパディングを追加 */
+    padding: 15px; 
+    justify-content: flex-end; 
+    flex-direction: row; 
   }
 
   .pos-top { align-items: flex-start; }
@@ -225,7 +255,6 @@
     align-items: center;
     justify-content: center;
     z-index: 20;
-    /* 右側配置のときは常に左を向かせる */
     transform: scaleX(-1);
   }
 
@@ -233,7 +262,6 @@
     position: relative;
     pointer-events: none;
     z-index: 10;
-    /* キャラの透明部分に重ねて密着させる（反転しているのでマイナス値を調整） */
     margin-right: -25px; 
     margin-top: 10px;
   }

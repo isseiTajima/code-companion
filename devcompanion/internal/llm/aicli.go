@@ -19,61 +19,49 @@ type AICLIClient struct {
 // NewAICLIClient は AICLIClient を作成する。
 func NewAICLIClient() *AICLIClient {
 	return &AICLIClient{
-		timeout: aicliRouterTimeout, // router.go の定数を使用
+		timeout: 10 * time.Second,
 	}
 }
 
-// Generate は ~/.bin/ai を実行してプロンプトを処理し、結果を返す。
-// コマンド実行失敗やタイムアウト時はエラーを返す。
-func (c *AICLIClient) Generate(ctx context.Context, in OllamaInput) (string, error) {
-	// renderPrompt は ollama.go で定義されており、共通の promptTemplate を使用する
+func (c *AICLIClient) Generate(ctx context.Context, in OllamaInput) (string, string, error) {
 	prompt, err := renderPrompt(in)
 	if err != nil {
-		return "", fmt.Errorf("render prompt: %w", err)
+		return "", "", fmt.Errorf("render prompt: %w", err)
 	}
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("get home dir: %w", err)
+		return "", prompt, fmt.Errorf("get home dir: %w", err)
 	}
 
 	aiPath := filepath.Join(homeDir, ".bin", "ai")
+	// 存在確認
+	if _, err := os.Stat(aiPath); err != nil {
+		return "", prompt, fmt.Errorf("ai cli not found at %s", aiPath)
+	}
 
-	// タイムアウト付きコンテキストを作成
-	timeoutCtx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
-
-	// コマンド実行
-	cmd := exec.CommandContext(timeoutCtx, aiPath, prompt)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, aiPath, "-p", prompt)
+	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	err = cmd.Run()
-	if err != nil {
-		// コンテキストキャンセル時はタイムアウトエラーとして扱う
-		if timeoutCtx.Err() != nil {
-			return "", fmt.Errorf("ai cli timeout: %w", timeoutCtx.Err())
+	if err := cmd.Run(); err != nil {
+		// stderrの内容があればそれを含める
+		if stderr.Len() > 0 {
+			return "", prompt, fmt.Errorf("ai cli error: %w (stderr: %s)", err, strings.TrimSpace(stderr.String()))
 		}
-		// その他のエラーはコマンド実行エラーとして扱う
-		return "", fmt.Errorf("ai cli error: %w", err)
+		// 130エラーはコマンド実行エラーとして扱う
+		return "", prompt, fmt.Errorf("ai cli error: %w", err)
 	}
 
 	result := strings.TrimSpace(stdout.String())
 	if result == "" {
-		return "", fmt.Errorf("ai cli returned empty output")
+		return "", prompt, fmt.Errorf("ai cli returned empty output")
 	}
 
-	return result, nil
+	return result, prompt, nil
 }
 
 func (c *AICLIClient) IsAvailable() bool {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return false
-	}
-	aiPath := filepath.Join(homeDir, ".bin", "ai")
-	_, err = os.Stat(aiPath)
-	return err == nil
+	return false // Always skip legacy CLI in auto-router
 }

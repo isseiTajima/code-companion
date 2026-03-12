@@ -2,7 +2,7 @@ package monitor
 
 import (
 	"log"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 )
 
 // SignalLogger は受信したシグナルを標準出力に記録する。

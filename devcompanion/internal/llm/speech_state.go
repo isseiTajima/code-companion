@@ -1,15 +1,16 @@
 package llm
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
 
 // SpeechState は発言状態と履歴を管理する。
 type SpeechState struct {
-	mu          sync.RWMutex
-	recentLines []string        // 最大10件の発言履歴
-	recentEvents []SpeechEvent  // 最大10件のイベント履歴
+	mu           sync.RWMutex
+	recentLines  []string     // 最大10件の発言履歴
+	recentEvents []SpeechEvent // 最大10件のイベント履歴
 }
 
 type SpeechEvent struct {
@@ -20,13 +21,12 @@ type SpeechEvent struct {
 // NewSpeechState は SpeechState を初期化する。
 func NewSpeechState() *SpeechState {
 	return &SpeechState{
-		recentLines: make([]string, 0, 10),
+		recentLines:  make([]string, 0, 10),
 		recentEvents: make([]SpeechEvent, 0, 10),
 	}
 }
 
 // AddLine は発言を履歴に追加する。
-// 最大10件を保持し、超過時は最古を削除する。
 func (ss *SpeechState) AddLine(text string) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
@@ -37,34 +37,71 @@ func (ss *SpeechState) AddLine(text string) {
 	}
 }
 
-// AddEvent はイベントを履歴に追加する。
-// 最大10件を保持し、超過時は最古を削除する。
-func (ss *SpeechState) AddEvent(eventType string, timestamp time.Time) {
-	ss.mu.Lock()
-	defer ss.mu.Unlock()
-
-	ss.recentEvents = append(ss.recentEvents, SpeechEvent{
-		Type: eventType,
-		Time: timestamp,
-	})
-	if len(ss.recentEvents) > 10 {
-		ss.recentEvents = ss.recentEvents[1:]
+// normalize は重複判定のためにテキストを正規化する。
+// 句読点の除去に加えて、語尾の揺らぎ（〜な気がします/する, 〜ました/た 等）を吸収する。
+func normalizeForDedup(s string) string {
+	// 句読点・記号除去
+	for _, r := range []string{"。", "、", "．", "，", ".", ",", "!", "！", "?", "？", "…", "〜", "～", "ー", " ", "　"} {
+		s = strings.ReplaceAll(s, r, "")
 	}
+	s = strings.TrimSpace(s)
+
+	// 語尾の揺らぎを正規化（長い順に置換して誤置換を防ぐ）
+	endings := []struct{ from, to string }{
+		{"な気がします", "気"},
+		{"な気がする", "気"},
+		{"気がします", "気"},
+		{"気がする", "気"},
+		{"見てました", "見た"},
+		{"見てます", "見た"},
+		{"見てた", "見た"},
+		{"ですよね", ""},
+		{"ですよ", ""},
+		{"ですね", ""},
+		{"だよね", ""},
+		{"だよ", ""},
+		{"ですか", ""},
+		{"ですかね", ""},
+		{"なのはわたしだけですかね", ""},
+		{"なのはわたしだけ", ""},
+		{"じゃないですか", ""},
+		{"じゃないですかね", ""},
+		{"んですけど", ""},
+		{"んですが", ""},
+		{"ましたね", ""},
+		{"ました", ""},
+		{"してます", ""},
+		{"してる", ""},
+		{"します", ""},
+		{"する", ""},
+	}
+	for _, e := range endings {
+		if strings.HasSuffix(s, e.from) {
+			s = s[:len(s)-len(e.from)] + e.to
+		}
+	}
+
+	return s
 }
 
-// IsDuplicate は直近の重複判定を行う。
+// IsDuplicate は直近の発言と重複・類似しているかを判定する。
 func (ss *SpeechState) IsDuplicate(text string) bool {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
 
-	// 直近2件のみ確認（応答性を優先）
-	start := len(ss.recentLines) - 2
+	normTarget := normalizeForDedup(text)
+	if normTarget == "" {
+		return true // 空文字（または記号のみ）は重複扱い
+	}
+
+	// 直近5件を確認（プール利用時はより広い範囲をチェック）
+	start := len(ss.recentLines) - 5
 	if start < 0 {
 		start = 0
 	}
 
 	for i := start; i < len(ss.recentLines); i++ {
-		if ss.recentLines[i] == text {
+		if normalizeForDedup(ss.recentLines[i]) == normTarget {
 			return true
 		}
 	}
@@ -83,7 +120,6 @@ func (ss *SpeechState) GetRecentLines(limit int) []string {
 }
 
 // GetLastEventTime は最後のイベント時刻を返す。
-// イベント履歴がない場合は zero time を返す。
 func (ss *SpeechState) GetLastEventTime() time.Time {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
@@ -98,27 +134,7 @@ func (ss *SpeechState) GetLastEventTime() time.Time {
 func (ss *SpeechState) HasDeepFocus(now time.Time) bool {
 	lastEventTime := ss.GetLastEventTime()
 	if lastEventTime.IsZero() {
-		return false // イベント履歴がない
+		return false
 	}
 	return now.Sub(lastEventTime) >= 3*time.Minute
-}
-
-// GetRecentEvents は直近のイベント履歴を返す。
-func (ss *SpeechState) GetRecentEvents(limit int) []SpeechEvent {
-	ss.mu.RLock()
-	defer ss.mu.RUnlock()
-
-	if limit > len(ss.recentEvents) {
-		limit = len(ss.recentEvents)
-	}
-	events := make([]SpeechEvent, limit)
-	copy(events, ss.recentEvents[len(ss.recentEvents)-limit:])
-	return events
-}
-
-// EventCount はイベント履歴の件数を返す。
-func (ss *SpeechState) EventCount() int {
-	ss.mu.RLock()
-	defer ss.mu.RUnlock()
-	return len(ss.recentEvents)
 }

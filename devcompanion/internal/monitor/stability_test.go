@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"devcompanion/internal/config"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/config"
+	"sakura-kodama/internal/types"
 )
 
 func TestLongRunningStability(t *testing.T) {
@@ -65,7 +65,7 @@ func TestLongRunningStability(t *testing.T) {
 			Type:      types.SigFileModified,
 			Source:    types.SourceFS,
 			Value:     fmt.Sprintf("file_%d.go", i),
-			Timestamp: time.Now(),
+			Timestamp: types.TimeToStr(time.Now()),
 		}
 		m.InjectSignal(sig)
 		
@@ -74,7 +74,7 @@ func TestLongRunningStability(t *testing.T) {
 			m.InjectSignal(types.Signal{
 				Type:      types.SigGitCommit,
 				Source:    types.SourceGit,
-				Timestamp: time.Now(),
+				Timestamp: types.TimeToStr(time.Now()),
 			})
 		}
 		

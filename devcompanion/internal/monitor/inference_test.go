@@ -305,7 +305,7 @@ func TestInfer_ExitCodeLine_ScoresDebug(t *testing.T) {
 func TestInfer_FailureSignal_BiasesFixFailingTests(t *testing.T) {
 	// Given: FAIL ログが最新バッファに入っている
 	ti := NewTaskInferrer()
-	ti.AddLine("FAIL\tdevcompanion/internal/monitor 0.34s")
+	ti.AddLine("FAIL\tsakura-kodama/internal/monitor 0.34s")
 
 	// When: 推論
 	task := ti.Infer(0)

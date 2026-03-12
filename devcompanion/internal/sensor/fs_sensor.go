@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -65,12 +65,14 @@ func (s *FSSensor) Run(ctx context.Context, signals chan<- types.Signal) error {
 				msg = "lint"
 			}
 
-			signals <- types.Signal{
-				Type:      types.SigFileModified,
-				Source:    types.SourceFS,
-				Value:     event.Name,
-				Message:   msg,
-				Timestamp: time.Now(),
+			if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
+				signals <- types.Signal{
+					Type:      types.SigFileModified,
+					Source:    types.SourceFS,
+					Value:     event.Name,
+					Message:   msg,
+					Timestamp: types.TimeToStr(time.Now()),
+				}
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {

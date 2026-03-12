@@ -1,8 +1,8 @@
 package transport
 
 import (
-	"devcompanion/internal/engine"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/engine"
+	"sakura-kodama/internal/types"
 )
 
 // MultiNotifier は複数の Notifier にイベントを転送する。

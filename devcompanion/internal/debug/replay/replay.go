@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 )
 
 // Mode は再生モード。
@@ -60,8 +60,9 @@ func (r *Replayer) Run(ctx context.Context, out chan<- types.Signal) error {
 			continue // パースエラーはスキップ
 		}
 
+		sigTime := types.StrToTime(sig.Timestamp)
 		if r.mode == ModeRealTime && !lastTime.IsZero() {
-			diff := sig.Timestamp.Sub(lastTime)
+			diff := sigTime.Sub(lastTime)
 			if diff > 0 {
 				select {
 				case <-time.After(diff):
@@ -71,9 +72,9 @@ func (r *Replayer) Run(ctx context.Context, out chan<- types.Signal) error {
 			}
 		}
 
-		lastTime = sig.Timestamp
+		lastTime = sigTime
 		// 現在時刻に書き換える（コンテキストエンジンが正しく動作するため）
-		sig.Timestamp = time.Now()
+		sig.Timestamp = types.TimeToStr(time.Now())
 
 		select {
 		case out <- sig:

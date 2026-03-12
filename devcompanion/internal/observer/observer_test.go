@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"devcompanion/internal/monitor"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/monitor"
+	"sakura-kodama/internal/types"
 )
 
 func TestObserver_OnMonitorEvent(t *testing.T) {
@@ -27,8 +27,8 @@ func TestObserver_OnMonitorEvent(t *testing.T) {
 		t.Error("expected observation, got none")
 	}
 
-	// 2. Active Editing 検知テスト
-	for i := 0; i < 3; i++ {
+	// 2. Active Editing 検知テスト（activeEditThreshold=10に合わせて送信）
+	for i := 0; i < 10; i++ {
 		o.OnMonitorEvent(monitor.MonitorEvent{State: types.StateCoding}, now.Add(time.Duration(i)*time.Second))
 	}
 

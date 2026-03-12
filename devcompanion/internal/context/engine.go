@@ -1,7 +1,7 @@
 package contextengine
 
 import (
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 	"fmt"
 	"sync"
 )

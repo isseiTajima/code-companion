@@ -1,13 +1,16 @@
 package llm
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
-	"devcompanion/internal/config"
-	"devcompanion/internal/monitor"
-	"devcompanion/internal/profile"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/config"
+	"sakura-kodama/internal/monitor"
+	"sakura-kodama/internal/profile"
+	"sakura-kodama/internal/types"
 )
 
 func testConfig() *config.Config {
@@ -41,18 +44,39 @@ func TestFrequencyController_UserClick_AlwaysSpeaks(t *testing.T) {
 	}
 }
 
-func TestSpeechGenerator_FallbackBackend_ReturnsTemplateText(t *testing.T) {
+func TestSpeechGenerator_Generate_ContainsDetailsAndQuestion(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"message":{"content":"了解しました！"},"done":true}`))
+	}))
+	defer server.Close()
+
 	cfg := testConfig()
+	cfg.OllamaEndpoint = server.URL
 	sg := NewSpeechGenerator(cfg)
 	prof := profile.DevProfile{}
 
 	event := monitor.MonitorEvent{
-		State: types.StateIdle,
+		State:   types.StateCoding,
+		Details: "main.go",
 	}
+	question := "今日は何をすればいい？"
 
-	speech := sg.Generate(event, cfg, ReasonUserClick, prof)
+	_, prompt, _ := sg.Generate(event, cfg, ReasonUserQuestion, prof, question)
 
-	if speech == "" {
-		t.Error("want non-empty speech")
+	if !strings.Contains(prompt, "main.go") {
+		t.Errorf("prompt should contain details 'main.go', but got: %s", prompt)
+	}
+	if !strings.Contains(prompt, question) {
+		t.Errorf("prompt should contain question '%s', but got: %s", question, prompt)
+	}
+}
+
+func TestPostProcess_TrimsLongSpeech(t *testing.T) {
+	input := "これは非常に長いセリフです。80文字を超える場合は適切にカットされる必要があります。あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん"
+	got := postProcess(input)
+	
+	if len([]rune(got)) > 120 {
+		t.Errorf("postProcess should trim to 120 chars, got %d", len([]rune(got)))
 	}
 }

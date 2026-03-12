@@ -15,12 +15,16 @@ func TestRouter_EventContext_BuildSuccessEmbedding(t *testing.T) {
 	var receivedPrompt string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Prompt string `json:"prompt"`
+			Messages []struct {
+				Content string `json:"content"`
+			} `json:"messages"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
-		receivedPrompt = req.Prompt
+		if len(req.Messages) > 0 {
+			receivedPrompt = req.Messages[0].Content
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"response":"ok","done":true}`))
+		_, _ = w.Write([]byte(`{"message":{"content":"ok"},"done":true}`))
 	}))
 	defer server.Close()
 
@@ -29,12 +33,14 @@ func TestRouter_EventContext_BuildSuccessEmbedding(t *testing.T) {
 	router := &LLMRouter{ollama: ollama}
 
 	input := OllamaInput{
-		Event: "build_success",
+		Language: "ja",
+		Reason:   humanizeReason(ReasonSuccess, "ja"),
+		Behavior: humanizeBehavior("active_edit", "ja"),
 	}
-	_, _, _ = router.Route(context.Background(), input)
+	_, _, _, _ = router.Route(context.Background(), input)
 
-	if !strings.Contains(receivedPrompt, "build_success") {
-		t.Errorf("prompt missing event: %s", receivedPrompt)
+	if !strings.Contains(receivedPrompt, "アプリが動くところまで確認できた") {
+		t.Errorf("prompt missing humanized reason: %s", receivedPrompt)
 	}
 }
 
@@ -43,12 +49,16 @@ func TestRouter_EventContext_EmptyEvent(t *testing.T) {
 	var receivedPrompt string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Prompt string `json:"prompt"`
+			Messages []struct {
+				Content string `json:"content"`
+			} `json:"messages"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
-		receivedPrompt = req.Prompt
+		if len(req.Messages) > 0 {
+			receivedPrompt = req.Messages[0].Content
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"response":"ok","done":true}`))
+		_, _ = w.Write([]byte(`{"message":{"content":"ok"},"done":true}`))
 	}))
 	defer server.Close()
 
@@ -56,9 +66,10 @@ func TestRouter_EventContext_EmptyEvent(t *testing.T) {
 	router := &LLMRouter{ollama: ollama}
 
 	input := OllamaInput{
-		Event: "",
+		Language: "ja",
+		Event:    "",
 	}
-	_, _, _ = router.Route(context.Background(), input)
+	_, _, _, _ = router.Route(context.Background(), input)
 
 	if strings.Contains(receivedPrompt, "直近のイベント:") {
 		t.Errorf("prompt should not contain event label when empty: %s", receivedPrompt)

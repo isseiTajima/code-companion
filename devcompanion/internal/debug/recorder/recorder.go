@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 )
 
 // Recorder はシグナルをJSONL形式で記録する。
@@ -29,7 +29,7 @@ func New(enabled bool) (*Recorder, error) {
 		return nil, err
 	}
 
-	dir := filepath.Join(home, ".devcompanion", "signals")
+	dir := filepath.Join(home, ".sakura-kodama", "signals")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}

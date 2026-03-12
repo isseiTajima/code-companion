@@ -5,95 +5,117 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 )
 
-const (
-	anthropicEndpoint   = "https://api.anthropic.com/v1/messages"
-	anthropicModel      = "claude-haiku-4-5-20251001"
-	anthropicAPIVersion = "2023-06-01"
-	anthropicTimeout    = 5 * time.Second
-)
+const anthropicAPIVersion = "2023-06-01"
 
-// AnthropicClient は Anthropic Messages API のクライアント。
+// AnthropicClient は Claude API へのリクエストを担当する。
 type AnthropicClient struct {
-	apiKey     string
-	endpoint   string
-	timeout    time.Duration
-	httpClient *http.Client
+	apiKey   string
+	model    string
+	endpoint string
+	timeout  time.Duration
 }
 
 // NewAnthropicClient は AnthropicClient を作成する。
-// apiKey が空の場合は ANTHROPIC_API_KEY 環境変数を使用する。
 func NewAnthropicClient(apiKey string) *AnthropicClient {
 	if apiKey == "" {
 		apiKey = os.Getenv("ANTHROPIC_API_KEY")
 	}
-	// DisableKeepAlives: コンテキストキャンセル時に TCP 接続を即座に閉じる
 	return &AnthropicClient{
 		apiKey:   apiKey,
-		endpoint: anthropicEndpoint,
-		timeout:  anthropicTimeout,
-		httpClient: &http.Client{
-			Transport: &http.Transport{
-				DisableKeepAlives: true,
-			},
-		},
+		model:    "claude-3-5-sonnet-20240620",
+		endpoint: "https://api.anthropic.com/v1/messages",
+		timeout:  10 * time.Second,
 	}
 }
 
-// Generate は Anthropic Messages API へリクエストし、生成されたテキストを返す。
-func (c *AnthropicClient) Generate(ctx context.Context, in OllamaInput) (string, error) {
+type anthropicRequest struct {
+	Model     string             `json:"model"`
+	MaxTokens int                `json:"max_tokens"`
+	Messages  []anthropicMessage `json:"messages"`
+}
+
+type anthropicMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type anthropicResponse struct {
+	Content []struct {
+		Text string `json:"text"`
+	} `json:"content"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+func (c *AnthropicClient) Generate(ctx context.Context, in OllamaInput) (string, string, error) {
+	if c.apiKey == "" {
+		return "", "", fmt.Errorf("anthropic api key is empty")
+	}
+
 	prompt, err := renderPrompt(in)
 	if err != nil {
-		return "", fmt.Errorf("prompt render: %w", err)
+		return "", "", err
 	}
 
-	reqBody, err := json.Marshal(map[string]interface{}{
-		"model":      anthropicModel,
-		"max_tokens": 100,
-		"messages":   []map[string]string{{"role": "user", "content": prompt}},
-	})
+	reqBody := anthropicRequest{
+		Model:     c.model,
+		MaxTokens: 300,
+		Messages: []anthropicMessage{
+			{Role: "user", Content: prompt},
+		},
+	}
+
+	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
+		return "", prompt, err
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(timeoutCtx, http.MethodPost, c.endpoint, bytes.NewReader(reqBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.endpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
+		return "", prompt, err
 	}
+
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", c.apiKey)
 	req.Header.Set("anthropic-version", anthropicAPIVersion)
-	req.Header.Set("content-type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	client := &http.Client{Timeout: c.timeout}
+	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("http request: %w", err)
+		return "", prompt, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("anthropic returned status %d", resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", prompt, err
 	}
 
-	var result struct {
-		Content []struct {
-			Text string `json:"text"`
-		} `json:"content"`
+	if resp.StatusCode != http.StatusOK {
+		return "", prompt, fmt.Errorf("anthropic api error (status %d): %s", resp.StatusCode, string(body))
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("decode response: %w", err)
+
+	var res anthropicResponse
+	if err := json.Unmarshal(body, &res); err != nil {
+		return "", prompt, err
 	}
-	if len(result.Content) == 0 {
-		return "", fmt.Errorf("empty content in response")
+
+	if res.Error != nil {
+		return "", prompt, fmt.Errorf("anthropic api error: %s", res.Error.Message)
 	}
-	return strings.TrimSpace(result.Content[0].Text), nil
+
+	if len(res.Content) > 0 {
+		return res.Content[0].Text, prompt, nil
+	}
+
+	return "", prompt, fmt.Errorf("anthropic returned empty content")
 }
 
 func (c *AnthropicClient) IsAvailable() bool {

@@ -5,11 +5,17 @@ import {context} from '../models';
 import {config} from '../models';
 import {monitor} from '../models';
 
+export function AnswerQuestion(arg1:string):Promise<void>;
+
 export function AppendSpeechHistory(arg1:string,arg2:string):Promise<void>;
 
 export function CancelInstall():Promise<void>;
 
 export function CompleteSetup():Promise<void>;
+
+export function CreateSakuraModel(arg1:string):Promise<string>;
+
+export function DeleteModel(arg1:string):Promise<void>;
 
 export function DetectSetupStatus():Promise<main.SetupStatus>;
 
@@ -19,11 +25,15 @@ export function GetContext():Promise<context.Context>;
 
 export function InstallOllama():Promise<void>;
 
+export function ListOllamaModels():Promise<Array<string>>;
+
 export function LoadConfig():Promise<config.Config>;
 
 export function LogGeminiActivity(arg1:string):Promise<void>;
 
 export function OnCharaClick():Promise<void>;
+
+export function PullModel(arg1:string):Promise<void>;
 
 export function SaveConfig(arg1:config.Config):Promise<void>;
 
@@ -32,3 +42,5 @@ export function SetClickThrough(arg1:boolean):Promise<void>;
 export function SetLastEvent(arg1:monitor.MonitorEvent):Promise<void>;
 
 export function SetMonitor(arg1:monitor.Monitor):Promise<void>;
+
+export function TriggerTestQuestion(arg1:string):Promise<void>;

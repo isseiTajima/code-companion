@@ -1,38 +1,46 @@
 package monitor
 
-import "testing"
+import (
+	"sakura-kodama/internal/types"
+	"testing"
+)
 
 func TestInferMood_SuccessReturnsHappy(t *testing.T) {
-	mood := InferMood(StateSuccess, TaskRunTests)
+	ev := MonitorEvent{State: types.StateSuccess}
+	mood := InferMood(ev)
 	if mood != MoodHappy {
 		t.Errorf("want %s for success state, got %s", MoodHappy, mood)
 	}
 }
 
-func TestInferMood_FailReturnsNervous(t *testing.T) {
-	mood := InferMood(StateFail, TaskDebug)
-	if mood != MoodNervous {
-		t.Errorf("want %s for fail state, got %s", MoodNervous, mood)
+func TestInferMood_FailReturnsConcerned(t *testing.T) {
+	ev := MonitorEvent{State: types.StateFail}
+	mood := InferMood(ev)
+	if mood != MoodConcerned {
+		t.Errorf("want %s for fail state, got %s", MoodConcerned, mood)
 	}
 }
 
-func TestInferMood_RunningGenerateCodeIsFocus(t *testing.T) {
-	mood := InferMood(StateRunning, TaskGenerateCode)
+func TestInferMood_CodingGenerateCodeIsFocus(t *testing.T) {
+	ev := MonitorEvent{State: types.StateCoding, Task: TaskGenerateCode}
+	mood := InferMood(ev)
 	if mood != MoodFocus {
-		t.Errorf("want %s when running & generating code, got %s", MoodFocus, mood)
+		t.Errorf("want %s when coding & generating code, got %s", MoodFocus, mood)
 	}
 }
 
-func TestInferMood_RunningFixFailingTestsIsFocus(t *testing.T) {
-	mood := InferMood(StateRunning, TaskFixFailingTests)
+func TestInferMood_CodingDebugIsFocus(t *testing.T) {
+	ev := MonitorEvent{State: types.StateCoding, Task: TaskDebug}
+	mood := InferMood(ev)
 	if mood != MoodFocus {
-		t.Errorf("want %s for fix-failing-tests focus, got %s", MoodFocus, mood)
+		t.Errorf("want %s for coding+debug, got %s", MoodFocus, mood)
 	}
 }
 
-func TestInferMood_ThinkingPlanDefaultsCalm(t *testing.T) {
-	mood := InferMood(StateThinking, TaskPlan)
-	if mood != MoodCalm {
-		t.Errorf("want %s for thinking plan, got %s", MoodCalm, mood)
+func TestInferMood_ThinkingReturnsFocus(t *testing.T) {
+	ev := MonitorEvent{State: types.StateThinking}
+	mood := InferMood(ev)
+	if mood != MoodFocus {
+		t.Errorf("want %s for thinking, got %s", MoodFocus, mood)
 	}
 }

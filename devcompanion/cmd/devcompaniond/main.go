@@ -8,21 +8,21 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"devcompanion/internal/config"
-	contextengine "devcompanion/internal/context"
-	"devcompanion/internal/engine"
-	"devcompanion/internal/llm"
-	"devcompanion/internal/monitor"
-	"devcompanion/internal/observer"
-	"devcompanion/internal/persona"
-	"devcompanion/internal/profile"
-	ws_transport "devcompanion/internal/transport/websocket"
-	"devcompanion/internal/types"
-	"devcompanion/internal/ws"
+	"sakura-kodama/internal/config"
+	contextengine "sakura-kodama/internal/context"
+	"sakura-kodama/internal/engine"
+	"sakura-kodama/internal/llm"
+	"sakura-kodama/internal/monitor"
+	"sakura-kodama/internal/observer"
+	"sakura-kodama/internal/persona"
+	"sakura-kodama/internal/profile"
+	ws_transport "sakura-kodama/internal/transport/websocket"
+	"sakura-kodama/internal/types"
+	"sakura-kodama/internal/ws"
 )
 
 func main() {
-	log.Println("[SERVER] Initializing DevCompanion Server Mode...")
+	log.Println("[SERVER] Initializing Sakura Kodama Server Mode...")
 
 	// 1. Config 読み込み
 	appCfg, err := config.LoadConfig()
@@ -78,7 +78,7 @@ func main() {
 	go eng.Run(ctx)
 	go eng.StartupGreeting(ctx)
 
-	log.Println("[SERVER] DevCompanion Server Mode is now running.")
+	log.Println("[SERVER] Sakura Kodama Server Mode is now running.")
 	log.Println("[SERVER] Press Ctrl+C to stop.")
 
 	<-ctx.Done()

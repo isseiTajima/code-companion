@@ -1,4 +1,4 @@
-module devcompanion
+module sakura-kodama
 
 go 1.25.0
 

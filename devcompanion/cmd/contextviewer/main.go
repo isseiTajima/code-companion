@@ -9,10 +9,10 @@ import (
 	"os"
 	"time"
 
-	"devcompanion/internal/behavior"
-	"devcompanion/internal/context"
-	"devcompanion/internal/session"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/behavior"
+	"sakura-kodama/internal/context"
+	"sakura-kodama/internal/session"
+	"sakura-kodama/internal/types"
 )
 
 func main() {
@@ -50,7 +50,8 @@ func main() {
 		decision := est.ProcessSignal(sig)
 		beh.AddSignal(sig)
 		b := beh.Infer()
-		s := sess.Update(b, sig.Timestamp)
+		ts := types.StrToTime(sig.Timestamp)
+		s := sess.Update(b, ts)
 
 		reason := ""
 		if len(decision.Reasons) > 0 {
@@ -58,7 +59,7 @@ func main() {
 		}
 
 		fmt.Printf("%-25s | %-20s | %-15s | %-15s | %.2f | %s\n",
-			sig.Timestamp.Format("2006-01-02 15:04:05"),
+			ts.Format("2006-01-02 15:04:05"),
 			string(sig.Type),
 			string(decision.State),
 			string(s.Mode),

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"devcompanion/internal/config"
-	"devcompanion/internal/monitor"
-	"devcompanion/internal/profile"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/config"
+	"sakura-kodama/internal/monitor"
+	"sakura-kodama/internal/profile"
+	"sakura-kodama/internal/types"
 )
 
 // TestSpeechGenerator_FallbackFlag_InitiallyFalse は usingFallback フラグの初期状態テスト。
@@ -89,7 +89,7 @@ func TestSpeechGenerator_Fallback_RecordingState(t *testing.T) {
 		State: types.StateDeepWork,
 	}
 
-	speech := sg.Generate(event, cfg, ReasonUserClick, profile.DevProfile{})
+	speech, _, _ := sg.Generate(event, cfg, ReasonUserClick, profile.DevProfile{}, "")
 	if speech == "" {
 		t.Error("want non-empty speech even after fallback")
 	}
@@ -122,7 +122,7 @@ func TestSpeechGenerator_Fallback_MultipleCallsConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			speech := sg.Generate(event, cfg, ReasonUserClick, profile.DevProfile{})
+			speech, _, _ := sg.Generate(event, cfg, ReasonUserClick, profile.DevProfile{}, "")
 			results <- speech
 		}()
 	}
@@ -171,7 +171,7 @@ func TestSpeechGenerator_ClaudeSuccess_ResetsUsingFallback(t *testing.T) {
 		State: types.StateIdle,
 	}
 
-	speech := sg.Generate(event, cfg, ReasonUserClick, profile.DevProfile{})
+	speech, _, _ := sg.Generate(event, cfg, ReasonUserQuestion, profile.DevProfile{}, "テスト質問")
 	if speech != "復帰した" {
 		t.Errorf("want '復帰した', got %q", speech)
 	}

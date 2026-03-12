@@ -4,12 +4,16 @@
   import c1Close from '../assets/pixel-chara1-close.png'
   
   import c2Happy from '../assets/pixel-chara2-happy.png'
+  
+  import c3Sad1 from '../assets/pixel-chara3.png'
+  import c3Sad2 from '../assets/pixel-chara3-2.png'
 
   let { 
     status = 'Idle', 
-    mood = 'Calm', 
+    mood = 'Neutral', 
     scale = 1,
     isTalking = false,
+    flipped = false,
     onClick = () => {} 
   } = $props()
 
@@ -17,7 +21,44 @@
   let eyeState = $state(0) // 0:open, 1:half, 2:close
   let blinkTimer: ReturnType<typeof setTimeout>
 
+  // 強い喜びの維持用
+  let joyTimer: ReturnType<typeof setTimeout> | null = null
+  let forceHappy = $state(false)
+
+  // 悲しみの固有アニメーション用
+  let sadFrame = $state(0)
+  let sadTimer: ReturnType<typeof setInterval> | null = null
+
+  $effect(() => {
+    // 喜びの処理
+    if (mood === 'StrongJoy' || mood === 'Positive') {
+      forceHappy = true
+      if (joyTimer) clearTimeout(joyTimer)
+      joyTimer = setTimeout(() => {
+        forceHappy = false
+      }, 8000) // 喜びは8秒間維持
+    }
+
+    // 悲しみの処理
+    if (mood === 'Sadness' || mood === 'Negative') {
+      if (!sadTimer) {
+        sadTimer = setInterval(() => {
+          sadFrame = (sadFrame + 1) % 2
+        }, 500)
+      }
+    } else {
+      if (sadTimer) {
+        clearInterval(sadTimer)
+        sadTimer = null
+      }
+    }
+  })
+
   function blink() {
+    if (mood === 'Sadness' || mood === 'Negative') {
+      blinkTimer = setTimeout(blink, 1000)
+      return
+    }
     eyeState = 1
     setTimeout(() => {
       eyeState = 2
@@ -32,17 +73,25 @@
     }, 80)
   }
 
-  $effect(() => {
+  onMount(() => {
     blinkTimer = setTimeout(blink, 3000)
-    return () => clearTimeout(blinkTimer)
+    return () => {
+      clearTimeout(blinkTimer)
+      if (joyTimer) clearTimeout(joyTimer)
+    }
   })
+
+  import { onMount } from 'svelte'
 
   // 状態に応じた画像選択
   const currentImg = $derived.by(() => {
-    const isHappy = status === 'Success' || mood === 'Happy'
-    
-    if (isHappy) {
-      // 喜び状態（瞬きなし、または1枚絵）
+    // 悲しみ状態
+    if (mood === 'Sadness' || mood === 'Negative') {
+      return sadFrame === 0 ? c3Sad1 : c3Sad2
+    }
+
+    // 強い喜び、または維持期間中
+    if (mood === 'StrongJoy' || forceHappy) {
       return c2Happy
     }
     
@@ -56,15 +105,16 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div 
-  class="chara-wrapper" 
+  class="chara-wrapper"
   class:talking={isTalking}
-  style="transform: scale({scale})"
+  class:flipped={flipped}
   onclick={onClick}
 >
-  <img 
-    src={currentImg} 
-    alt="Character" 
+  <img
+    src={currentImg}
+    alt="Character"
     class="pixel-art"
+    style="width: {Math.round(128 * scale)}px"
   />
 </div>
 
@@ -76,16 +126,22 @@
     height: auto;
     animation: floating 3s ease-in-out infinite;
     cursor: pointer;
-    transition: transform 0.2s, opacity 0.5s; /* 透過度の変化を滑らかに */
-    opacity: 0.6; /* 通常時は少し透ける */
+    transition: transform 0.2s, opacity 0.5s;
+    opacity: 0.8; /* 以前より少し濃く */
+  }
+
+  .chara-wrapper.flipped {
+    transform: scaleX(-1) !important;
+  }
+  .chara-wrapper.flipped img {
+    transform: scaleX(1); 
   }
 
   .chara-wrapper.talking {
-    opacity: 1; /* 喋っている時はくっきり表示 */
+    opacity: 1;
   }
 
   img.pixel-art {
-    width: 128px; 
     height: auto;
     image-rendering: pixelated;
   }

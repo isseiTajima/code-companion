@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"sakura-kodama/internal/types"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,18 +11,21 @@ import (
 
 // Relationship はユーザーとサクラの親密度モデル。
 type Relationship struct {
-	Level                  int     `json:"relationship_level"`        // 0-100
-	Trust                  int     `json:"trust"`                     // 0-100
-	EncouragementPreference string  `json:"encouragement_preference"` // "gentle"|"strict"
+	Level                   int    `json:"relationship_level"`        // 0-100
+	Trust                   int    `json:"trust"`                     // 0-100
+	EncouragementPreference string `json:"encouragement_preference"` // "gentle"|"strict"
 }
 
 // DevProfile はセリフ生成に渡す開発者プロファイル。
 type DevProfile struct {
-	NightCoder      bool         `json:"night_coder"`
-	CommitFrequency string       `json:"commit_frequency"` // "low"|"medium"|"high"
-	BuildFailRate   string       `json:"build_fail_rate"`  // "low"|"medium"|"high"
-	LastActive      string       `json:"last_active"`      // ISO 8601
-	Relationship    Relationship `json:"relationship"`
+	NightCoder      bool                           `json:"night_coder"`
+	CommitFrequency string                         `json:"commit_frequency"` // "low"|"medium"|"high"
+	BuildFailRate   string                         `json:"build_fail_rate"`  // "low"|"medium"|"high"
+	LastActive      string                         `json:"last_active"`      // ISO 8601
+	Relationship    Relationship                   `json:"relationship"`
+	Personality     types.UserPersonality          `json:"personality"`
+	Evolution       map[types.TraitID]types.TraitProgress `json:"evolution"`
+	Memories        []types.ProjectMoment          `json:"memories"`
 }
 
 // fileData はファイルに永続化する統計データと DevProfile を合わせた構造体。
@@ -42,9 +46,11 @@ type ProfileStore struct {
 }
 
 // NewProfileStore は ProfileStore を初期化する。
-// path のファイルが存在する場合は既存データをロードし、累積する。
 func NewProfileStore(path string) (*ProfileStore, error) {
 	ps := &ProfileStore{path: path}
+	ps.data.Personality.Traits = make(map[types.TraitID]float64)
+	ps.data.Evolution = make(map[types.TraitID]types.TraitProgress)
+	ps.data.Memories = make([]types.ProjectMoment, 0)
 
 	raw, err := os.ReadFile(path)
 	if err == nil {
@@ -55,7 +61,17 @@ func NewProfileStore(path string) (*ProfileStore, error) {
 		return nil, fmt.Errorf("read profile: %w", err)
 	}
 
-	// 統計から DevProfile を再計算（ファイルの DevProfile フィールドは再計算で上書き）
+	// 必須フィールドの初期化
+	if ps.data.Personality.Traits == nil {
+		ps.data.Personality.Traits = make(map[types.TraitID]float64)
+	}
+	if ps.data.Evolution == nil {
+		ps.data.Evolution = make(map[types.TraitID]types.TraitProgress)
+	}
+	if ps.data.Memories == nil {
+		ps.data.Memories = make([]types.ProjectMoment, 0)
+	}
+
 	ps.data.DevProfile = computeProfile(ps.data)
 	return ps, nil
 }
@@ -87,7 +103,7 @@ func (ps *ProfileStore) RecordBuildFail() {
 	_ = ps.save()
 }
 
-// RecordActivity はアクティビティを記録する。高頻度で呼ばれるためファイル I/O は行わない。
+// RecordActivity はアクティビティを記録する。
 func (ps *ProfileStore) RecordActivity(now time.Time) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
@@ -99,6 +115,48 @@ func (ps *ProfileStore) RecordActivity(now time.Time) {
 	ps.data.DevProfile = computeProfile(ps.data)
 }
 
+// RecordTraitUpdate はユーザーの回答に基づいて特性を更新する。
+func (ps *ProfileStore) RecordTraitUpdate(trait types.TraitID, value float64, answer string) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	current := ps.data.Personality.Traits[trait]
+	if current == 0 {
+		ps.data.Personality.Traits[trait] = value
+	} else {
+		ps.data.Personality.Traits[trait] = (current + value) / 2.0
+	}
+
+	prog := ps.data.Evolution[trait]
+	prog.Confidence += 0.2
+	if prog.Confidence > 1.0 {
+		prog.Confidence = 1.0
+	}
+	if prog.Confidence >= 0.8 {
+		prog.CurrentStage = 2
+	} else if prog.Confidence >= 0.4 {
+		prog.CurrentStage = 1
+	}
+	prog.LastAnswer = answer
+	prog.LastUpdated = types.TimeToStr(time.Now())
+	ps.data.Evolution[trait] = prog
+
+	ps.data.DevProfile = computeProfile(ps.data)
+	_ = ps.save()
+}
+
+// RecordMoment はプロジェクトの重要な瞬間を記録する。
+func (ps *ProfileStore) RecordMoment(moment types.ProjectMoment) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	ps.data.Memories = append(ps.data.Memories, moment)
+	if len(ps.data.Memories) > 50 {
+		ps.data.Memories = ps.data.Memories[1:]
+	}
+	ps.data.DevProfile = computeProfile(ps.data)
+	_ = ps.save()
+}
+
 // Get は現在の DevProfile を返す。
 func (ps *ProfileStore) Get() DevProfile {
 	ps.mu.Lock()
@@ -106,14 +164,13 @@ func (ps *ProfileStore) Get() DevProfile {
 	return ps.data.DevProfile
 }
 
-// Stop は LastActive を含む最終データをファイルに書き込む。
+// Stop は最終データを保存する。
 func (ps *ProfileStore) Stop() error {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return ps.save()
 }
 
-// save はデータをファイルに書き込む。呼び出し元で mu を保持していること。
 func (ps *ProfileStore) save() error {
 	b, err := json.MarshalIndent(ps.data, "", "  ")
 	if err != nil {
@@ -122,7 +179,6 @@ func (ps *ProfileStore) save() error {
 	return os.WriteFile(ps.path, b, 0644)
 }
 
-// computeProfile は統計データから DevProfile を計算する。
 func computeProfile(d fileData) DevProfile {
 	return DevProfile{
 		CommitFrequency: commitFrequency(d.CommitCount),
@@ -130,44 +186,40 @@ func computeProfile(d fileData) DevProfile {
 		NightCoder:      nightCoder(d.NightActivity, d.TotalActivity),
 		LastActive:      d.LastActive,
 		Relationship:    computeRelationship(d),
+		Personality:     d.Personality,
+		Evolution:       d.Evolution,
+		Memories:        d.Memories,
 	}
 }
 
 func computeRelationship(d fileData) Relationship {
-	// 基礎レベル: アクティビティ100回ごとに1レベルアップ (上限100)
 	level := d.TotalActivity / 100
 	if level > 100 {
 		level = 100
 	}
-
-	// 信頼度: 成功体験の共有 (成功5回ごとに1)
 	trust := d.BuildSuccess / 5
 	if trust > 100 {
 		trust = 100
 	}
-
-	// 励まし方針の初期値
 	pref := "gentle"
 	if d.BuildFail > d.BuildSuccess*2 {
-		pref = "strict" // 失敗が多すぎる場合は少し厳しく
+		pref = "strict"
 	}
-
 	return Relationship{
-		Level:                  level,
-		Trust:                  trust,
+		Level:                   level,
+		Trust:                   trust,
 		EncouragementPreference: pref,
 	}
 }
 
 func commitFrequency(count int) string {
-	switch {
-	case count >= 5:
+	if count >= 5 {
 		return "high"
-	case count >= 2:
-		return "medium"
-	default:
-		return "low"
 	}
+	if count >= 2 {
+		return "medium"
+	}
+	return "low"
 }
 
 func buildFailRate(success, fail int) string {
@@ -176,14 +228,13 @@ func buildFailRate(success, fail int) string {
 		return "low"
 	}
 	rate := float64(fail) / float64(total) * 100
-	switch {
-	case rate > 60:
+	if rate > 60 {
 		return "high"
-	case rate > 30:
-		return "medium"
-	default:
-		return "low"
 	}
+	if rate > 30 {
+		return "medium"
+	}
+	return "low"
 }
 
 func nightCoder(nightActivity, totalActivity int) bool {
@@ -193,7 +244,6 @@ func nightCoder(nightActivity, totalActivity int) bool {
 	return float64(nightActivity)/float64(totalActivity) >= 0.3
 }
 
-// isNightHour は時刻が深夜帯（23:00〜04:59）かを返す。
 func isNightHour(hour int) bool {
 	return hour >= 23 || hour < 5
 }

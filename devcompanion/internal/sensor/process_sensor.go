@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 	"github.com/shirou/gopsutil/v3/process"
 )
 
@@ -63,14 +63,14 @@ func (s *ProcessSensor) Run(ctx context.Context, signals chan<- types.Signal) er
 						Type:      types.SigProcessStarted,
 						Source:    types.SourceProcess,
 						Value:     target,
-						Timestamp: time.Now(),
+						Timestamp: types.TimeToStr(time.Now()),
 					}
 				} else if !currentRunning[target] && runningStates[target] {
 					signals <- types.Signal{
 						Type:      types.SigProcessStopped,
 						Source:    types.SourceProcess,
 						Value:     target,
-						Timestamp: time.Now(),
+						Timestamp: types.TimeToStr(time.Now()),
 					}
 				}
 				runningStates[target] = currentRunning[target]

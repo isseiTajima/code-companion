@@ -8,8 +8,8 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"devcompanion/internal/monitor"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/monitor"
+	"sakura-kodama/internal/types"
 )
 
 // ObservationType は観察イベントの種類を表す。

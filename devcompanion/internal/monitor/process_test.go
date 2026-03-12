@@ -3,7 +3,7 @@ package monitor
 import (
 	"testing"
 
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 )
 
 func TestDetector_recordSignal(t *testing.T) {

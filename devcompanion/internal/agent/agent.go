@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 )
 
 // AgentAdapter は特定のAIエージェントの検知と活動抽出を行う。

@@ -16,18 +16,18 @@ func TestOllamaGenerate_RetriesOnceThenSucceeds(t *testing.T) {
 		attempts++
 		if attempts == 1 {
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"response":"","done":false}`))
+			_, _ = w.Write([]byte(`{"message":{"content":""},"done":false}`))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"response":"  success  ","done":true}`))
+		_, _ = w.Write([]byte(`{"message":{"content":"  success  "},"done":true}`))
 	}))
 	defer server.Close()
 
 	client := NewOllamaClient(server.URL, "gemma")
 	client.timeout = 100 * time.Millisecond
 
-	text, err := client.Generate(context.Background(), OllamaInput{
+	text, _, err := client.Generate(context.Background(), OllamaInput{
 		State:  "Running",
 		Task:   "GenerateCode",
 		Mood:   "Focus",
@@ -53,14 +53,14 @@ func TestOllamaGenerate_AllRetriesFailReturnError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"response":"","done":false}`))
+		_, _ = w.Write([]byte(`{"message":{"content":""},"done":false}`))
 	}))
 	defer server.Close()
 
 	client := NewOllamaClient(server.URL, "gemma")
 	client.timeout = 50 * time.Millisecond
 
-	if _, err := client.Generate(context.Background(), OllamaInput{}); err == nil {
+	if _, _, err := client.Generate(context.Background(), OllamaInput{}); err == nil {
 		t.Fatal("want error after retry exhaustion, got nil")
 	}
 	if attempts != retryAttempts {

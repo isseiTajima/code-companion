@@ -2,7 +2,7 @@ package wails
 
 import (
 	"context"
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )

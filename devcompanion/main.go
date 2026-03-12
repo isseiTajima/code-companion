@@ -12,12 +12,12 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"devcompanion/internal/config"
-	"devcompanion/internal/llm"
-	"devcompanion/internal/monitor"
-	"devcompanion/internal/observer"
-	"devcompanion/internal/profile"
-	"devcompanion/internal/ws"
+	"sakura-kodama/internal/config"
+	"sakura-kodama/internal/llm"
+	"sakura-kodama/internal/monitor"
+	"sakura-kodama/internal/observer"
+	"sakura-kodama/internal/profile"
+	"sakura-kodama/internal/ws"
 )
 
 //go:embed all:frontend/dist
@@ -50,6 +50,11 @@ func main() {
 
 	devObserver, _ := observer.NewDevObserver(".")
 	wsServer := ws.NewServer()
+	go func() {
+		if err := wsServer.Start(); err != nil {
+			log.Printf("WS server error: %v", err)
+		}
+	}()
 	speechGen := llm.NewSpeechGenerator(&appCfg.Config)
 	
 	app := NewApp(&appCfg.Config, speechGen, wsServer, profileStore, assets, icon, devObserver)
@@ -67,7 +72,7 @@ func main() {
 
 	// 4. Wails 実行
 	if err := wails.Run(&options.App{
-		Title:            "DevCompanion",
+		Title:            "Sakura Kodama",
 		Width:            width,
 		Height:           height,
 		Frameless:        true,

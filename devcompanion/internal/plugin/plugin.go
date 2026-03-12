@@ -1,7 +1,7 @@
 package plugin
 
 import (
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 	"sync"
 )
 

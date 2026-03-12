@@ -2,12 +2,21 @@
   import { onDestroy } from 'svelte'
   import { InstallOllama } from '../lib/wails'
 
+  type QuestionData = {
+    trait_id: string;
+    preamble: string;
+    question: string;
+    options: string[];
+  }
+
   let { 
     message = { id: 0, text: '' }, 
     scale = 1, 
     usingFallback = false,
     visible = $bindable(false),
-    position = 'top-right'
+    position = 'top-right',
+    question = null as QuestionData | null,
+    onanswer = (traitID: string, index: number, text: string) => {}
   } = $props()
 
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -17,8 +26,19 @@
   let displayText = $state('')
 
   $effect(() => {
-    const text = message.text
+    // 質問モードの処理
+    if (question) {
+      displayText = question.question
+      visible = true
+      clearTimeout(timer ?? undefined)
+      // 質問は長めに表示（30秒）してから自動で閉じる
+      timer = setTimeout(() => { 
+        if (question) visible = false 
+      }, 30000)
+      return
+    }
 
+    const text = message.text
     if (!text) {
       visible = false
       return
@@ -59,24 +79,47 @@
     await InstallOllama()
   }
 
+  function handleAnswer(index: number, text: string) {
+    if (question) {
+      onanswer(question.trait_id, index, text)
+      visible = false
+    }
+  }
+
   onDestroy(() => { if (timer) clearTimeout(timer) })
 </script>
 
-{#if visible && trimmed}
-  <div class="balloon" 
-    class:fallback={usingFallback} 
+{#if visible && (trimmed || question)}
+  <div class="balloon"
+    class:fallback={usingFallback}
+    class:question-mode={!!question}
     style="
-      transform: scale({scale});
-      transform-origin: right center;
+      font-size: {Math.round(11 * scale)}px;
+      padding: {Math.round(12 * scale)}px {Math.round(16 * scale)}px;
+      border-radius: {Math.round(20 * scale)}px;
     "
   >
     <div class="content">
-      <p class="balloon-text">{#if usingFallback}<span class="fallback-label">🔄</span>&nbsp;{/if}{trimmed}</p>
+      {#if question && question.preamble}
+        <p class="preamble">{question.preamble}</p>
+      {/if}
+      
+      <p class="balloon-text">{trimmed}</p>
       
       {#if showInstallButton}
         <button class="install-btn" onclick={handleInstall}>
           今すぐインストール
         </button>
+      {/if}
+
+      {#if question}
+        <div class="options">
+          {#each question.options as option, i}
+            <button class="option-btn" onclick={() => handleAnswer(i, option)}>
+              {option}
+            </button>
+          {/each}
+        </div>
       {/if}
     </div>
   </div>
@@ -89,8 +132,7 @@
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border: 1.2px solid rgba(0, 0, 0, 0.1);
-    border-radius: 20px;
-    padding: 12px 16px;
+    /* border-radius / padding / font-size はインラインスタイルでスケール制御 */
     width: auto;
     max-width: 250px;
     min-height: 40px;
@@ -104,9 +146,14 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    text-align: left; /* 左揃え */
+    text-align: left;
     box-sizing: border-box;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  }
+
+  .balloon.question-mode {
+    border: 1.5px solid #e91e63;
+    max-width: 280px;
   }
 
   .content {
@@ -114,6 +161,36 @@
     flex-direction: column;
     gap: 6px;
     width: 100%;
+  }
+
+  .preamble {
+    font-size: 11px;
+    color: #e91e63;
+    font-weight: bold;
+    margin: 0;
+  }
+
+  .options {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .option-btn {
+    background: #fce4ec;
+    border: 1px solid #f8bbd0;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 10px;
+    color: #c2185b;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s;
+  }
+
+  .option-btn:hover {
+    background: #f8bbd0;
   }
 
   .install-btn {
@@ -129,7 +206,7 @@
     align-self: flex-start;
   }
 
-  /* しっぽスタイル: 右下からキャラに向かって出る */
+  /* しっぽスタイル */
   .balloon::before, .balloon::after {
     content: '';
     position: absolute;

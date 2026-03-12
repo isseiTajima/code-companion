@@ -19,7 +19,22 @@ test-frontend:
 .PHONY: test
 test: test-go test-frontend
 
+.PHONY: lint
+lint:
+	@if command -v golangci-lint > /dev/null; then \
+		echo "[lint] running golangci-lint"; \
+		golangci-lint run ./...; \
+	else \
+		echo "golangci-lint is not installed. Please install it with: brew install golangci-lint"; \
+		exit 1; \
+	fi
+
 .PHONY: dev
 dev:
 	@echo "[dev] starting wails dev"
 	@wails dev
+
+.PHONY: question
+question:
+	@curl -s "http://127.0.0.1:34567/trigger?trait_id=$(TRAIT)"
+

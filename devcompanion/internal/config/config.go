@@ -1,7 +1,7 @@
 package config
 
 import (
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 	"encoding/json"
 	"gopkg.in/yaml.v3"
 	"os"
@@ -30,6 +30,8 @@ type Config struct {
 	SpeechFrequency          int      `json:"speech_frequency" yaml:"speech_frequency"`
 	WindowPosition           string   `json:"window_position" yaml:"window_position"` // top-right, bottom-right
 	Language                 string   `json:"language" yaml:"language"`               // ja, en
+	PersonaStyle             types.PersonaStyle   `json:"persona_style" yaml:"persona_style"`
+	RelationshipMode         types.RelationshipMode `json:"relationship_mode" yaml:"relationship_mode"`
 }
 
 type AppConfig struct {
@@ -37,19 +39,18 @@ type AppConfig struct {
 	IdleTimeout   int                        `yaml:"idle_timeout"`
 	FocusWindow   int                        `yaml:"focus_window"`
 	SignalWeights map[types.SignalType]float64 `yaml:"signal_weights"`
-	PersonaStyle  types.PersonaStyle         `yaml:"persona_style"`
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		Name:                     "サクラ",
-		UserName:                 "開発者",
+		Name:                     "さくら",
+		UserName:                 "先輩",
 		Tone:                     "フレンドリーな後輩",
 		EncourageFreq:            "mid",
 		Monologue:                true,
 		AlwaysOnTop:              true,
 		Mute:                     false,
-		Model:                    "gemma3:4b",
+		Model:                    "qwen2.5:4b",
 		OllamaEndpoint:           "http://localhost:11434/api/generate",
 		LogPaths:                 []string{""},
 		AutoStart:                false,
@@ -60,6 +61,8 @@ func DefaultConfig() *Config {
 		SpeechFrequency:          2,
 		WindowPosition:           "top-right",
 		Language:                 "ja",
+		PersonaStyle:             types.StyleCute,
+		RelationshipMode:         types.RelationshipNormal,
 	}
 }
 
@@ -74,7 +77,6 @@ func DefaultAppConfig() *AppConfig {
 			types.SigGitCommit:      0.7,
 			types.SigIdleStart:      0.8,
 		},
-		PersonaStyle: types.StyleSoft,
 	}
 }
 
@@ -83,9 +85,8 @@ func DefaultConfigPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "devcompanion", "config.yaml"), nil
+	return filepath.Join(home, ".config", "sakura-kodama", "config.yaml"), nil
 }
-
 func LoadConfig() (*AppConfig, error) {
 	path, err := DefaultConfigPath()
 	if err != nil {
@@ -94,11 +95,27 @@ func LoadConfig() (*AppConfig, error) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return DefaultAppConfig(), nil
+		// Migration logic: check old paths if new one doesn't exist
+		home, _ := os.UserHomeDir()
+		oldPaths := []string{
+			filepath.Join(home, ".config", "devcompanion", "config.yaml"),
+			filepath.Join(home, ".devcompanion", "config.yaml"),
+		}
+		for _, oldPath := range oldPaths {
+			if oldData, err := os.ReadFile(oldPath); err == nil {
+				data = oldData
+				break
+			}
+		}
+		if data == nil {
+			return DefaultAppConfig(), nil
+		}
 	}
 
 	cfg := DefaultAppConfig()
+	// YAML優先
 	if err := yaml.Unmarshal(data, cfg); err != nil {
+		// 失敗した場合はJSONとして試行
 		if err := json.Unmarshal(data, cfg); err != nil {
 			return DefaultAppConfig(), err
 		}

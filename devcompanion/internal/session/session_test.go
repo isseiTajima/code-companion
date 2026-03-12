@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"devcompanion/internal/types"
+	"sakura-kodama/internal/types"
 )
 
 func TestTracker_Update(t *testing.T) {
