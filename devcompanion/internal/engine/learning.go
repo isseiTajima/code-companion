@@ -17,6 +17,8 @@ const (
 	MinQuestionInterval = 1 * time.Hour
 	MaxQuestionsPerDay  = 3
 	ContextWindow       = 1 * time.Hour
+	// 同じトレイトに回答してからこの時間は再び聞かない
+	TraitAnswerCooldown = 12 * time.Hour
 )
 
 // LearningEngine は Sakura の好奇心と性格学習を管理する。
@@ -165,13 +167,20 @@ func (le *LearningEngine) evaluateTrigger() {
 
 	prof := le.profileStore.Get()
 
-	// 閾値を超えている、かつ未完了のトレイトをリストアップ
+	// 閾値を超えている、かつ再質問可能なトレイトをリストアップ
 	var candidates []types.TraitID
 	for trait, score := range le.curiosity {
 		progress := prof.Evolution[trait]
 		// すでに信頼度が1.0（完了）のものは自動では聞かない
 		if progress.Confidence >= 1.0 {
 			continue
+		}
+		// 直近 TraitAnswerCooldown 以内に回答済みのトレイトはスキップ
+		if progress.LastUpdated != "" {
+			lastAnswered := types.StrToTime(progress.LastUpdated)
+			if !lastAnswered.IsZero() && time.Since(lastAnswered) < TraitAnswerCooldown {
+				continue
+			}
 		}
 		if score >= CuriosityThreshold {
 			candidates = append(candidates, trait)

@@ -159,6 +159,7 @@ func (sg *SpeechGenerator) GenerateQuestion(userName string, trait types.TraitID
 		TraitLabel:   i18n.T(qLang, "trait."+string(trait)),
 		CurrentStage: progress.CurrentStage,
 		LastAnswer:   progress.LastAnswer,
+		PastAnswers:  progress.AskedTopics,
 		Behavior:     recentBehavior, // Stage 2 用のコンテキスト
 		Language:     "question_" + qLang,
 		RandomSeed:   time.Now().UnixNano() % 100000,

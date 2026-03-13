@@ -139,6 +139,13 @@ func (ps *ProfileStore) RecordTraitUpdate(trait types.TraitID, value float64, an
 	}
 	prog.LastAnswer = answer
 	prog.LastUpdated = types.TimeToStr(time.Now())
+	// 回答履歴を AskedTopics に追積（最大5件）
+	if answer != "" && answer != "対象なし" {
+		prog.AskedTopics = append(prog.AskedTopics, answer)
+		if len(prog.AskedTopics) > 5 {
+			prog.AskedTopics = prog.AskedTopics[len(prog.AskedTopics)-5:]
+		}
+	}
 	ps.data.Evolution[trait] = prog
 
 	ps.data.DevProfile = computeProfile(ps.data)

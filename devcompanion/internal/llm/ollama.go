@@ -88,7 +88,8 @@ type OllamaInput struct {
 	TraitID          string // 学習用特性ID
 	TraitLabel       string // 特性の説明ラベル（i18n から引く）
 	CurrentStage     int    // 進化ステージ
-	LastAnswer       string // 前回の回答
+	LastAnswer       string   // 前回の回答
+	PastAnswers      []string // このトレイトへの過去回答履歴（LLMに重複質問を避けさせるため）
 	PersonalityType  string // "genki", "cute", "tsukime"
 	RelationshipMode string // "normal", "lover"
 	LearnedTraits    map[string]float64 // 学習されたユーザーの特性 (0.0 - 1.0)
