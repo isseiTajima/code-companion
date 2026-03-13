@@ -10,6 +10,7 @@
     type AppConfig,
     onCharaClick,
     answerQuestion,
+    handleQuestionAnswer,
     DetectSetupStatus,
     ExpandForOnboarding,
     SetClickThrough,
@@ -131,7 +132,7 @@
   }
 
   function handleAnswer(traitID: string, index: number, text: string) {
-    answerQuestion(traitID, index, text)
+    handleQuestionAnswer(traitID, index, text)
     currentQuestion = null
   }
 

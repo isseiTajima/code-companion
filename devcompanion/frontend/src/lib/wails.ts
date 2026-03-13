@@ -3,6 +3,7 @@ import {
   SaveConfig as nativeSaveConfig,
   OnCharaClick as nativeOnCharaClick,
   AnswerQuestion as nativeAnswerQuestion,
+  HandleQuestionAnswer as nativeHandleQuestionAnswer,
   InstallOllama as nativeInstallOllama,
   CancelInstall as nativeCancelInstall,
   DetectSetupStatus as nativeDetectSetupStatus,
@@ -171,6 +172,14 @@ export function answerQuestion(question: string): Promise<void> | void {
     return Promise.resolve()
   }
   return nativeAnswerQuestion(question)
+}
+
+export function handleQuestionAnswer(traitID: string, optionIndex: number, answerText: string): Promise<void> | void {
+  if (!hasRuntime()) {
+    console.log('handleQuestionAnswer triggered (no runtime):', traitID, optionIndex, answerText)
+    return Promise.resolve()
+  }
+  return nativeHandleQuestionAnswer(traitID, optionIndex, answerText)
 }
 
 export async function InstallOllama(): Promise<void> {

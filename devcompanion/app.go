@@ -442,6 +442,13 @@ func (a *App) AnswerQuestion(question string) {
 	}
 }
 
+// HandleQuestionAnswer はサクラの性格質問に対するユーザーの回答を処理する（Wailsバインディング）。
+func (a *App) HandleQuestionAnswer(traitID string, optionIndex int, answerText string) {
+	if a.engine != nil {
+		a.engine.HandleQuestionAnswer(traitID, optionIndex, answerText)
+	}
+}
+
 // TriggerTestQuestion はテスト用に強制的にサクラからの質問を発生させる（Wailsバインディング）。
 func (a *App) TriggerTestQuestion(traitID string) {
 	if a.engine != nil {

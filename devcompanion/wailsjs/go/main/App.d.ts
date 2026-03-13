@@ -5,6 +5,8 @@ import {monitor} from '../models';
 
 export function AnswerQuestion(arg1:string):Promise<void>;
 
+export function HandleQuestionAnswer(arg1:string,arg2:number,arg3:string):Promise<void>;
+
 export function CancelInstall():Promise<void>;
 
 export function CompleteSetup():Promise<void>;

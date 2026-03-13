@@ -6,6 +6,10 @@ export function AnswerQuestion(arg1) {
   return window['go']['main']['App']['AnswerQuestion'](arg1);
 }
 
+export function HandleQuestionAnswer(arg1, arg2, arg3) {
+  return window['go']['main']['App']['HandleQuestionAnswer'](arg1, arg2, arg3);
+}
+
 export function CancelInstall() {
   return window['go']['main']['App']['CancelInstall']();
 }
