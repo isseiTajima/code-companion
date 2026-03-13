@@ -134,6 +134,8 @@
   function handleAnswer(traitID: string, index: number, text: string) {
     handleQuestionAnswer(traitID, index, text)
     currentQuestion = null
+    // 旧メッセージを消して、回答リアクションが来るまでバルーンを非表示にする
+    speechMessage = { id: ++speechSeq, text: '' }
   }
 
   onMount(async () => {

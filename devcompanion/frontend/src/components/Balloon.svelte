@@ -24,6 +24,8 @@
 
   let showInstallButton = $state(false)
   let displayText = $state('')
+  let showFreeInput = $state(false)
+  let freeInputText = $state('')
 
   $effect(() => {
     // 質問モードの処理
@@ -81,10 +83,29 @@
 
   function handleAnswer(index: number, text: string) {
     if (question) {
+      showFreeInput = false
+      freeInputText = ''
       onanswer(question.trait_id, index, text)
       visible = false
     }
   }
+
+  function handleFreeSubmit() {
+    const text = freeInputText.trim()
+    if (text) handleAnswer(-1, text)
+  }
+
+  function handleSkip() {
+    handleAnswer(-1, '対象なし')
+  }
+
+  // 質問が変わったら自由入力をリセット
+  $effect(() => {
+    if (!question) {
+      showFreeInput = false
+      freeInputText = ''
+    }
+  })
 
   onDestroy(() => { if (timer) clearTimeout(timer) })
 </script>
@@ -119,6 +140,23 @@
               {option}
             </button>
           {/each}
+          {#if showFreeInput}
+            <div class="free-input-row">
+              <!-- svelte-ignore a11y_autofocus -->
+              <input
+                class="free-input"
+                type="text"
+                placeholder="自由に入力..."
+                bind:value={freeInputText}
+                autofocus
+                onkeydown={(e) => e.key === 'Enter' && handleFreeSubmit()}
+              />
+              <button class="free-submit-btn" onclick={handleFreeSubmit} disabled={!freeInputText.trim()}>→</button>
+            </div>
+          {:else}
+            <button class="free-btn" onclick={() => showFreeInput = true}>✏️ 自由入力</button>
+          {/if}
+          <button class="skip-btn" onclick={handleSkip}>対象なし</button>
         </div>
       {/if}
     </div>
@@ -191,6 +229,74 @@
 
   .option-btn:hover {
     background: #f8bbd0;
+  }
+
+  .free-btn {
+    background: none;
+    border: 1px dashed #ccc;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 9px;
+    color: #999;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.2s, color 0.2s;
+  }
+
+  .free-btn:hover {
+    border-color: #c2185b;
+    color: #c2185b;
+  }
+
+  .skip-btn {
+    background: none;
+    border: none;
+    padding: 2px 0;
+    font-size: 9px;
+    color: #bbb;
+    cursor: pointer;
+    text-align: left;
+    text-decoration: underline;
+  }
+
+  .skip-btn:hover {
+    color: #888;
+  }
+
+  .free-input-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .free-input {
+    flex: 1;
+    font-size: 10px;
+    border: 1px solid #f8bbd0;
+    border-radius: 6px;
+    padding: 4px 6px;
+    outline: none;
+    min-width: 0;
+  }
+
+  .free-input:focus {
+    border-color: #e91e63;
+  }
+
+  .free-submit-btn {
+    background: #e91e63;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 4px 7px;
+    font-size: 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .free-submit-btn:disabled {
+    background: #ccc;
+    cursor: default;
   }
 
   .install-btn {

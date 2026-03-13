@@ -279,16 +279,19 @@ func preambleForPersonality(personality, lang string) string {
 //
 // 事前条件:
 //   - trait は空文字列であってはならない
-//   - optionIndex は 0 以上 2 以下
+//   - optionIndex は -1 以上 2 以下（-1 = 対象なし/自由入力/スキップ）
 func (le *LearningEngine) HandleAnswer(trait types.TraitID, optionIndex int, text string) {
 	if trait == "" {
 		panic("engine: LearningEngine.HandleAnswer: trait must not be empty")
 	}
-	if optionIndex < 0 || optionIndex > 2 {
-		panic(fmt.Sprintf("engine: LearningEngine.HandleAnswer: optionIndex must be 0..2, got %d", optionIndex))
+	if optionIndex < -1 || optionIndex > 2 {
+		panic(fmt.Sprintf("engine: LearningEngine.HandleAnswer: optionIndex must be -1..2, got %d", optionIndex))
 	}
 
-	le.profileStore.RecordTraitUpdate(trait, float64(optionIndex)/2.0, text)
+	// optionIndex == -1 は「対象なし/自由入力」: プロファイル更新はスキップ
+	if optionIndex >= 0 {
+		le.profileStore.RecordTraitUpdate(trait, float64(optionIndex)/2.0, text)
+	}
 
 	// 回答に対するリアクションを生成（回答テキストをコンテキストとして渡す）
 	go func(answerText string) {
