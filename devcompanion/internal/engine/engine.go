@@ -220,7 +220,8 @@ func (e *Engine) addHistory(msg string) {
 
 // StartupGreeting は起動時の挨拶を行う。
 func (e *Engine) StartupGreeting(ctx context.Context) {
-	time.Sleep(5 * time.Second)
+	// フロントエンドの Wails ウィンドウ初期化を待つ（5秒では足りないケースがある）
+	time.Sleep(10 * time.Second)
 	// Ollamaの準備を待つ（ベストエフォート）
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {

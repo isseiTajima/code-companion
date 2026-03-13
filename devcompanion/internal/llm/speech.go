@@ -83,8 +83,20 @@ func (sg *SpeechGenerator) prewarmPools(language, userName string, prof profile.
 	// log.Printf("[POOL] Prewarm complete for language=%s", language)
 }
 
+// highPriorityReason は TryLock でなく Lock() を使うべき高優先度 Reason。
+// これらは必ず発話されなければならず、別の Generate 実行中でもドロップしてはいけない。
+func highPriorityReason(r Reason) bool {
+	switch r {
+	case ReasonGreeting, ReasonInitSetup, ReasonUserQuestion, ReasonQuestionAnswered, ReasonUserClick:
+		return true
+	}
+	return false
+}
+
 func (sg *SpeechGenerator) Generate(e monitor.MonitorEvent, cfg *config.Config, reason Reason, prof profile.DevProfile, question string) (string, string, string) {
-	if !sg.mu.TryLock() {
+	if highPriorityReason(reason) {
+		sg.mu.Lock() // 高優先度: 必ず実行（別の生成が終わるまで待つ）
+	} else if !sg.mu.TryLock() {
 		return "", "", ""
 	}
 	defer sg.mu.Unlock()
