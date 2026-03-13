@@ -68,9 +68,11 @@
     appStatus = e.state
     appMood = e.mood
     if (e.speech) {
-      speechMessage = { id: ++speechSeq, text: e.speech }
       usingFallback = e.using_fallback
-      currentQuestion = null // 通常のセリフが来たら質問を消す
+      // 質問表示中は通常セリフを無視（質問はユーザーが答えるか30秒タイムアウトまで維持）
+      if (!currentQuestion) {
+        speechMessage = { id: ++speechSeq, text: e.speech }
+      }
       if (e.profile) {
         cfg.name = e.profile.name
         cfg.tone = e.profile.tone
