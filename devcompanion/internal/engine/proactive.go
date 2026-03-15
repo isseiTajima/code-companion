@@ -117,15 +117,43 @@ func (p *ProactiveEngine) selectInitiativeType() types.InitiativeType {
 	return types.InitObservation
 }
 
+// relativeTimeLabel は ISO 8601 タイムスタンプを「この前」「昨日」「先週」などの相対表現に変換する。
+func relativeTimeLabel(timestamp string) string {
+	t := types.StrToTime(timestamp)
+	if t.IsZero() {
+		return "以前"
+	}
+	d := time.Since(t)
+	switch {
+	case d < 2*time.Hour:
+		return "さっき"
+	case d < 24*time.Hour:
+		return "この前"
+	case d < 48*time.Hour:
+		return "昨日"
+	case d < 7*24*time.Hour:
+		return "先日"
+	default:
+		return "先週"
+	}
+}
+
 func (p *ProactiveEngine) executeInitiative(t types.InitiativeType, ev monitor.MonitorEvent) {
 	prof := p.profileStore.Get()
 
 	reason := llm.Reason("initiative_" + string(t))
 
-	// InitMemory の場合はメモリの内容をイベント詳細に埋め込む
-	if t == types.InitMemory && len(prof.Memories) > 0 {
-		m := prof.Memories[rand.Intn(len(prof.Memories))]
-		ev.Details = fmt.Sprintf("Remember: %s (at %s)", m.Message, m.Timestamp)
+	// InitMemory: PersonalMemories から引用し、時間感覚を添えてイベント詳細に埋め込む
+	if t == types.InitMemory {
+		if len(prof.PersonalMemories) > 0 {
+			m := prof.PersonalMemories[rand.Intn(len(prof.PersonalMemories))]
+			timeLabel := relativeTimeLabel(m.CreatedAt)
+			ev.Details = fmt.Sprintf("Memory: %s %s", timeLabel, m.Content)
+		} else if len(prof.Memories) > 0 {
+			// 個人メモリがなければ旧来のプロジェクトモーメントで補完
+			m := prof.Memories[rand.Intn(len(prof.Memories))]
+			ev.Details = fmt.Sprintf("Remember: %s (at %s)", m.Message, m.Timestamp)
+		}
 	}
 
 	p.dispatcher.DispatchSpeech("observation_event", ev, reason, "")

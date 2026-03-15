@@ -175,10 +175,30 @@ type WorldModel struct {
 
 // ProjectMoment stores a significant milestone or event in the project history.
 type ProjectMoment struct {
-	Type      string    `json:"type"` // milestone, struggle, success
-	Message   string    `json:"message"`
-	Timestamp string    `json:"timestamp"`
+	Type      string `json:"type"` // milestone, struggle, success
+	Message   string `json:"message"`
+	Timestamp string `json:"timestamp"`
 }
+
+// PersonalMemory はユーザーが質問回答・自由入力で語った個人的な情報を記録する。
+// サクラが後日「この前〇〇って言ってましたよね」と自然に引用するために使う。
+type PersonalMemory struct {
+	TraitID   string   `json:"trait_id,omitempty"` // 元となったtrait（質問回答時）
+	Content   string   `json:"content"`             // 回答・発言テキスト
+	Tags      []string `json:"tags"`                // カテゴリタグ e.g. ["hobby", "stress"]
+	CreatedAt string   `json:"created_at"`
+	Source    string   `json:"source"` // "question_answer" | "free_text"
+}
+
+// TraitPrivacyLevel は各 TraitID の開示レベルを定義する。
+// relationship_level がこの値を超えると質問対象になる。
+type TraitPrivacyLevel int
+
+const (
+	TraitPrivacyLow    TraitPrivacyLevel = 0  // 誰にでも聞ける: 開発スタイル・趣味
+	TraitPrivacyMedium TraitPrivacyLevel = 30 // ある程度親しい: メンタル・ストレス解消法
+	TraitPrivacyHigh   TraitPrivacyLevel = 60 // 親密: 好きな人のタイプ等
+)
 
 // --- Proactive Layer ---
 

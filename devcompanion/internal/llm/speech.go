@@ -295,14 +295,15 @@ func (sg *SpeechGenerator) generateDirect(e monitor.MonitorEvent, cfg *config.Co
 		TimeOfDay:        getTimeOfDay(time.Now().Hour(), cfg.Language),
 		Language:         cfg.Language,
 		Question:         question,
-		IsAnswerReaction: reason == ReasonQuestionAnswered,
-		WorkMemory:       memStr,
-		LastAnswer:       sg.lastSpeech,
-		PersonalityType:  sg.inferPersonalityType(reason, cfg),
-		RelationshipMode: string(cfg.RelationshipMode),
-		LearnedTraits:      make(map[string]float64),
-		LearnedTraitLabels: make(map[string]string),
-		RandomSeed:         time.Now().UnixNano() % 100000,
+		IsAnswerReaction:      reason == ReasonQuestionAnswered,
+		WorkMemory:            memStr,
+		PersonalMemorySummary: buildPersonalMemorySummary(prof.PersonalMemories, cfg.Language),
+		LastAnswer:            sg.lastSpeech,
+		PersonalityType:       sg.inferPersonalityType(reason, cfg),
+		RelationshipMode:      string(cfg.RelationshipMode),
+		LearnedTraits:         make(map[string]float64),
+		LearnedTraitLabels:    make(map[string]string),
+		RandomSeed:            time.Now().UnixNano() % 100000,
 	}
 
 	for k, v := range prof.Personality.Traits {
@@ -701,6 +702,67 @@ func isValidSpeechForLang(s, lang string) bool {
 	}
 
 	return true
+}
+
+// buildPersonalMemorySummary は PersonalMemories から直近5件をサマリー文字列に変換する。
+func buildPersonalMemorySummary(mems []types.PersonalMemory, lang string) string {
+	if len(mems) == 0 {
+		return ""
+	}
+	// 直近5件を使用
+	start := len(mems) - 5
+	if start < 0 {
+		start = 0
+	}
+	recent := mems[start:]
+	var sb strings.Builder
+	for _, m := range recent {
+		label := memoryTimeLabel(m.CreatedAt, lang)
+		if lang == "en" {
+			fmt.Fprintf(&sb, "- %s: \"%s\"\n", label, m.Content)
+		} else {
+			fmt.Fprintf(&sb, "- %s「%s」\n", label, m.Content)
+		}
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+// memoryTimeLabel は ISO 8601 タイムスタンプを相対表現に変換する。
+func memoryTimeLabel(timestamp, lang string) string {
+	t := types.StrToTime(timestamp)
+	if t.IsZero() {
+		if lang == "en" {
+			return "before"
+		}
+		return "以前"
+	}
+	d := time.Since(t)
+	if lang == "en" {
+		switch {
+		case d < 2*time.Hour:
+			return "just now"
+		case d < 24*time.Hour:
+			return "earlier today"
+		case d < 48*time.Hour:
+			return "yesterday"
+		case d < 7*24*time.Hour:
+			return "the other day"
+		default:
+			return "last week"
+		}
+	}
+	switch {
+	case d < 2*time.Hour:
+		return "さっき"
+	case d < 24*time.Hour:
+		return "この前"
+	case d < 48*time.Hour:
+		return "昨日"
+	case d < 7*24*time.Hour:
+		return "先日"
+	default:
+		return "先週"
+	}
 }
 
 // FrequencyController は発話頻度を制御する。

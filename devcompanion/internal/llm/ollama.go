@@ -92,9 +92,10 @@ type OllamaInput struct {
 	PastAnswers      []string // このトレイトへの過去回答履歴（LLMに重複質問を避けさせるため）
 	PersonalityType  string // "genki", "cute", "tsukime"
 	RelationshipMode string // "normal", "lover"
-	LearnedTraits      map[string]float64 // 学習されたユーザーの特性 (後方互換)
-	LearnedTraitLabels map[string]string  // 学習済み特性のテキストラベル（回答内容）
-	RandomSeed       int64  // 毎回異なる値を注入してプロンプトの一意性を保証
+	LearnedTraits        map[string]float64 // 学習されたユーザーの特性 (後方互換)
+	LearnedTraitLabels   map[string]string  // 学習済み特性のテキストラベル（回答内容）
+	PersonalMemorySummary string            // ユーザーの会話から得た個人情報のサマリー（複数行）
+	RandomSeed           int64              // 毎回異なる値を注入してプロンプトの一意性を保証
 }
 
 // OllamaClient はOllama APIのクライアント。

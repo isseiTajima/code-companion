@@ -18,6 +18,9 @@ Personality: {{if eq .PersonalityType "genki"}}Energetic — upbeat and encourag
 {{if .WorkMemory}}
 [Work Memory]
 {{.WorkMemory}}
+{{end}}{{if .PersonalMemorySummary}}
+[What {{.UserName}} has shared]
+{{.PersonalMemorySummary}}
 {{end}}{{if .LearnedTraitLabels}}
 [Known about the user]
 {{range $k, $v := .LearnedTraitLabels}}- {{$k}}: {{$v}}
@@ -68,9 +71,10 @@ Output ONLY the greeting line.
 [Process]
 1. From the event, form ONE simple observation about the user's work
 2. Decide Sakura's emotion (e.g. respect, encouragement, curiosity, concern)
-3. Generate 5 candidate lines in Sakura's voice
-4. Choose the most natural and rule-compliant line
-5. Output ONLY that line — no explanation, no numbering
+3. If "What {{.UserName}} has shared" or "Known about the user" contains something relevant, weave it in naturally (e.g. "You mentioned you like X — makes sense.", "Didn't you say X the other day?")
+4. Generate 5 candidate lines in Sakura's voice
+5. Choose the most natural and rule-compliant line
+6. Output ONLY that line — no explanation, no numbering
 {{end}}
 
 [{{.RandomSeed}}]

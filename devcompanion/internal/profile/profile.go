@@ -19,14 +19,15 @@ type Relationship struct {
 
 // DevProfile はセリフ生成に渡す開発者プロファイル。
 type DevProfile struct {
-	NightCoder      bool                           `json:"night_coder"`
-	CommitFrequency string                         `json:"commit_frequency"` // "low"|"medium"|"high"
-	BuildFailRate   string                         `json:"build_fail_rate"`  // "low"|"medium"|"high"
-	LastActive      string                         `json:"last_active"`      // ISO 8601
-	Relationship    Relationship                   `json:"relationship"`
-	Personality     types.UserPersonality          `json:"personality"`
-	Evolution       map[types.TraitID]types.TraitProgress `json:"evolution"`
-	Memories        []types.ProjectMoment          `json:"memories"`
+	NightCoder        bool                                 `json:"night_coder"`
+	CommitFrequency   string                               `json:"commit_frequency"` // "low"|"medium"|"high"
+	BuildFailRate     string                               `json:"build_fail_rate"`  // "low"|"medium"|"high"
+	LastActive        string                               `json:"last_active"`      // ISO 8601
+	Relationship      Relationship                         `json:"relationship"`
+	Personality       types.UserPersonality                `json:"personality"`
+	Evolution         map[types.TraitID]types.TraitProgress `json:"evolution"`
+	Memories          []types.ProjectMoment                `json:"memories"`
+	PersonalMemories  []types.PersonalMemory               `json:"personal_memories"`
 }
 
 // fileData はファイルに永続化する統計データと DevProfile を合わせた構造体。
@@ -37,6 +38,7 @@ type fileData struct {
 	BuildFail     int `json:"build_fail"`
 	NightActivity int `json:"night_activity"` // 深夜帯のイベント数
 	TotalActivity int `json:"total_activity"` // 全イベント数
+	AnswerCount   int `json:"answer_count"`   // 質問への回答数（Trust 強化）
 }
 
 // ProfileStore は開発者プロファイルを管理する。
@@ -52,6 +54,7 @@ func NewProfileStore(path string) (*ProfileStore, error) {
 	ps.data.Personality.Traits = make(map[types.TraitID]float64)
 	ps.data.Evolution = make(map[types.TraitID]types.TraitProgress)
 	ps.data.Memories = make([]types.ProjectMoment, 0)
+	ps.data.PersonalMemories = make([]types.PersonalMemory, 0)
 
 	raw, err := os.ReadFile(path)
 	if err == nil {
@@ -71,6 +74,9 @@ func NewProfileStore(path string) (*ProfileStore, error) {
 	}
 	if ps.data.Memories == nil {
 		ps.data.Memories = make([]types.ProjectMoment, 0)
+	}
+	if ps.data.PersonalMemories == nil {
+		ps.data.PersonalMemories = make([]types.PersonalMemory, 0)
 	}
 
 	ps.data.DevProfile = computeProfile(ps.data)
@@ -157,6 +163,23 @@ func (ps *ProfileStore) RecordTraitUpdate(trait types.TraitID, value float64, an
 	}
 	ps.data.Evolution[trait] = prog
 
+	// 質問に答えてくれたことで AnswerCount を加算（Trust 計算に反映）
+	if answer != "" && answer != "対象なし" {
+		ps.data.AnswerCount++
+	}
+
+	ps.data.DevProfile = computeProfile(ps.data)
+	_ = ps.save()
+}
+
+// RecordPersonalMemory はユーザーの個人情報・会話内容を記録する（最大100件）。
+func (ps *ProfileStore) RecordPersonalMemory(mem types.PersonalMemory) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	ps.data.PersonalMemories = append(ps.data.PersonalMemories, mem)
+	if len(ps.data.PersonalMemories) > 100 {
+		ps.data.PersonalMemories = ps.data.PersonalMemories[1:]
+	}
 	ps.data.DevProfile = computeProfile(ps.data)
 	_ = ps.save()
 }
@@ -197,14 +220,15 @@ func (ps *ProfileStore) save() error {
 
 func computeProfile(d fileData) DevProfile {
 	return DevProfile{
-		CommitFrequency: commitFrequency(d.CommitCount),
-		BuildFailRate:   buildFailRate(d.BuildSuccess, d.BuildFail),
-		NightCoder:      nightCoder(d.NightActivity, d.TotalActivity),
-		LastActive:      d.LastActive,
-		Relationship:    computeRelationship(d),
-		Personality:     d.Personality,
-		Evolution:       d.Evolution,
-		Memories:        d.Memories,
+		CommitFrequency:  commitFrequency(d.CommitCount),
+		BuildFailRate:    buildFailRate(d.BuildSuccess, d.BuildFail),
+		NightCoder:       nightCoder(d.NightActivity, d.TotalActivity),
+		LastActive:       d.LastActive,
+		Relationship:     computeRelationship(d),
+		Personality:      d.Personality,
+		Evolution:        d.Evolution,
+		Memories:         d.Memories,
+		PersonalMemories: d.PersonalMemories,
 	}
 }
 
@@ -213,7 +237,8 @@ func computeRelationship(d fileData) Relationship {
 	if level > 100 {
 		level = 100
 	}
-	trust := d.BuildSuccess / 5
+	// Trust: ビルド成功 + 質問回答数（各2pt）の合算
+	trust := d.BuildSuccess/5 + d.AnswerCount*2
 	if trust > 100 {
 		trust = 100
 	}

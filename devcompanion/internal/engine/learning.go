@@ -168,8 +168,15 @@ func (le *LearningEngine) evaluateTrigger() {
 	prof := le.profileStore.Get()
 
 	// 閾値を超えている、かつ再質問可能なトレイトをリストアップ
+	relationshipLevel := prof.Relationship.Level
 	var candidates []types.TraitID
 	for trait, score := range le.curiosity {
+		// プライバシーレベルによる解放制御
+		if privLevel, ok := traitPrivacy[trait]; ok {
+			if relationshipLevel < int(privLevel) {
+				continue
+			}
+		}
 		progress := prof.Evolution[trait]
 		// すでに信頼度が1.0（完了）のものは自動では聞かない
 		if progress.Confidence >= 1.0 {
@@ -284,6 +291,62 @@ func preambleForPersonality(personality, lang string) string {
 	}
 }
 
+// traitPrivacy は各トレイトの開示レベルを定義する。未登録はLow（0）扱い。
+var traitPrivacy = map[types.TraitID]types.TraitPrivacyLevel{
+	// Medium: メンタル・ストレス・内面
+	types.TraitEncouragementStyle: types.TraitPrivacyMedium,
+	types.TraitPraisePreference:   types.TraitPrivacyMedium,
+	types.TraitStressRelief:       types.TraitPrivacyMedium,
+	types.TraitAlonePreference:    types.TraitPrivacyMedium,
+	types.TraitMotivationSource:   types.TraitPrivacyMedium,
+	// High: 人間関係・パーソナルアトラクション
+	types.TraitPersonalityAttraction: types.TraitPrivacyHigh,
+}
+
+// traitTags は各トレイトのメモリタグを定義する。
+var traitTags = map[types.TraitID][]string{
+	types.TraitFocusStyle:            {"dev", "focus"},
+	types.TraitFeedbackPreference:    {"dev", "feedback"},
+	types.TraitInterruptionTolerance: {"dev", "focus"},
+	types.TraitDebuggingStyle:        {"dev", "debugging"},
+	types.TraitCodeReviewStyle:       {"dev"},
+	types.TraitExperimentationStyle:  {"dev", "curiosity"},
+	types.TraitWorkPace:              {"workstyle", "rhythm"},
+	types.TraitBreakStyle:            {"workstyle", "rhythm"},
+	types.TraitDeadlineStyle:         {"workstyle"},
+	types.TraitMultitaskStyle:        {"workstyle"},
+	types.TraitThinkingStyle:         {"thinking"},
+	types.TraitCuriosityLevel:        {"thinking", "curiosity"},
+	types.TraitRiskTolerance:         {"thinking"},
+	types.TraitPerfectionism:         {"thinking"},
+	types.TraitLearningStyle:         {"learning"},
+	types.TraitMotivationSource:      {"learning", "mental"},
+	types.TraitTeachingStyle:         {"learning"},
+	types.TraitWorkspaceStyle:        {"environment"},
+	types.TraitNotificationStyle:     {"environment"},
+	types.TraitSilencePreference:     {"environment"},
+	types.TraitBackgroundNoise:       {"environment"},
+	types.TraitEncouragementStyle:    {"mental"},
+	types.TraitPraisePreference:      {"mental"},
+	types.TraitStressRelief:          {"mental", "stress"},
+	types.TraitAlonePreference:       {"mental"},
+	types.TraitLifeStyle:             {"lifestyle"},
+	types.TraitMusicHabit:            {"lifestyle", "music"},
+	types.TraitFoodPreference:        {"lifestyle", "food"},
+	types.TraitFavoriteDrink:         {"lifestyle", "food"},
+	types.TraitFavoriteSnack:         {"lifestyle", "food"},
+	types.TraitHobby:                 {"hobby"},
+	types.TraitGamePreference:        {"hobby", "game"},
+	types.TraitAnimePreference:       {"hobby", "anime"},
+	types.TraitReadingHabit:          {"hobby", "reading"},
+	types.TraitTechInterest:          {"dev", "curiosity"},
+	types.TraitCommunicationStyle:    {"communication"},
+	types.TraitConversationStyle:     {"communication"},
+	types.TraitPersonalityAttraction: {"personal", "relationship"},
+	types.TraitFavoriteSeason:        {"lifestyle"},
+	types.TraitFavoriteWeather:       {"lifestyle"},
+}
+
 // HandleAnswer はユーザーの回答を処理し、プロファイルを更新してリアクションを生成する。
 //
 // 事前条件:
@@ -300,6 +363,25 @@ func (le *LearningEngine) HandleAnswer(trait types.TraitID, optionIndex int, tex
 	// optionIndex == -1 は「対象なし/自由入力」: プロファイル更新はスキップ
 	if optionIndex >= 0 {
 		le.profileStore.RecordTraitUpdate(trait, float64(optionIndex)/2.0, text)
+	}
+
+	// PersonalMemory に記録（「対象なし」以外の有効な回答のみ）
+	if text != "" && text != "対象なし" {
+		source := "question_answer"
+		if optionIndex < 0 {
+			source = "free_text"
+		}
+		tags := traitTags[trait]
+		if tags == nil {
+			tags = []string{}
+		}
+		le.profileStore.RecordPersonalMemory(types.PersonalMemory{
+			TraitID:   string(trait),
+			Content:   text,
+			Tags:      tags,
+			CreatedAt: types.TimeToStr(time.Now()),
+			Source:    source,
+		})
 	}
 
 	// 回答に対するリアクションを生成（回答テキストをコンテキストとして渡す）
