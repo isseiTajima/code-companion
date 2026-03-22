@@ -728,7 +728,13 @@ func isValidSpeechForLang(s, lang string) bool {
 			"code looks clean", "code looks nice", "code looks neat", "code looks readable", "looks organized",
 			"colors changed", "color changed", "color of your code",
 			// 五感禁止
-			"smell", "coffee aroma", "keyboard sound", "i can hear"}
+			"smell", "coffee aroma", "keyboard sound", "i can hear",
+			// 汎用フィラー禁止
+			"good work", "great work", "i see,", "i see.", "i see!", "i understand", "take a break", "need a break",
+			// 時間直接言及
+			"that's a long time", "so much time", "working for so long",
+			// 季節比喩
+			"like summer", "like spring", "like winter", "like autumn", "like fall"}
 		sl := strings.ToLower(s)
 		for _, b := range bannedEN {
 			if strings.Contains(sl, b) {
@@ -755,6 +761,18 @@ func isValidSpeechForLang(s, lang string) bool {
 		"配置変えました", "確認してきます", "確認してみます", "見てきます",
 		"調べてきます", "やってきます", "直しておきます", "開いておきます",
 		"やっておきます", "しておきます",
+		// 汎用フィラー（プールを単調にする頻出パターン）
+		// 「お疲れ様」は別れ際・労いの言葉で作業観察コメントとして不自然
+		"お疲れ様",
+		// 「なるほど」は相手の発言への返答口調（さくらは観察者であり会話相手ではない）
+		"なるほど",
+		// 「すごい時間」は時間の直接言及（具体的分数と同様に避ける）
+		"すごい時間",
+		// 休憩命令・提案（質問形式でも指示に該当）
+		"休憩し",
+		// 季節比喩（ユーザーの好きな季節を毎回引用するパターンを防ぐ）
+		"夏みたい", "春みたい", "秋みたい", "冬みたい",
+		"夏っぽい", "春っぽい", "秋っぽい", "冬っぽい",
 	}
 	for _, b := range banned {
 		if strings.Contains(s, b) {
