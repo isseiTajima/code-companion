@@ -22,21 +22,30 @@ type LLMClient interface {
 
 // BatchRequest はバッチセリフ生成のパラメータをまとめた型。
 type BatchRequest struct {
-	Personality       string
-	RelationshipMode  string
-	Category          string
-	Language          string
-	UserName          string
-	LearnedTraits      map[string]float64 // 学習されたユーザーの特性 (後方互換)
-	LearnedTraitLabels map[string]string  // 学習済み特性のテキストラベル（回答内容）
-	Count             int
-	RecentLines       []string // avoid list: 直近の発言履歴
-	DiscardedPatterns []string // 動的Avoidリスト: 過去に破棄されたセリフ
+	Personality           string
+	RelationshipMode      string
+	Category              string
+	Language              string
+	UserName              string
+	LearnedTraits         map[string]float64 // 学習されたユーザーの特性 (後方互換)
+	LearnedTraitLabels    map[string]string  // 学習済み特性のテキストラベル（回答内容）
+	PersonalMemorySummary string             // ユーザーとの会話から得た個人情報サマリー
+	WorkingDuration       string             // 現在の作業継続時間ラベル（"", "short", "medium", "long"）
+	Count                 int
+	RecentLines           []string // avoid list: 直近の発言履歴
+	DiscardedPatterns     []string // 動的Avoidリスト: 過去に破棄されたセリフ
 }
 
 // BatchClient は複数セリフをまとめて生成できるバックエンドのインターフェース。
 type BatchClient interface {
 	BatchGenerate(ctx context.Context, req BatchRequest) ([]string, error)
+}
+
+// routerLayer はルーティング優先度順のバックエンド1層を表す。
+type routerLayer struct {
+	name    string
+	client  LLMClient
+	timeout time.Duration
 }
 
 // LLMRouter は複数のLLMバックエンドを優先度順にルーティングする。
@@ -47,43 +56,39 @@ type LLMRouter struct {
 	aiCLI  LLMClient
 }
 
+// orderedLayers は優先度順のバックエンド一覧を返す。
+// Route と BatchGenerate はこのリストをループするだけでよく、
+// バックエンド追加・順序変更はここだけを修正すればよい。
+func (r *LLMRouter) orderedLayers() []routerLayer {
+	return []routerLayer{
+		{"Ollama", r.ollama, ollamaRouterTimeout},
+		{"Claude", r.claude, claudeRouterTimeout},
+		{"Gemini", r.gemini, geminiRouterTimeout},
+		{"Gemini-CLI", r.aiCLI, aicliRouterTimeout},
+	}
+}
+
 // Route はプロンプトをLLMバックエンドにルーティングし、(応答テキスト, 使用したレイヤー名, 使用プロンプト, エラー) を返す。
 func (r *LLMRouter) Route(ctx context.Context, input OllamaInput) (string, string, string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", "", "", err
 	}
-
-	// Layer 1: Ollama
-	if result, prompt, ok := r.try(ctx, r.ollama, ollamaRouterTimeout, input, "Ollama"); ok {
-		return result, "Ollama", prompt, nil
+	for _, layer := range r.orderedLayers() {
+		if result, prompt, ok := r.try(ctx, layer.client, layer.timeout, input, layer.name); ok {
+			return result, layer.name, prompt, nil
+		}
 	}
-
-	// Layer 2: Claude
-	if result, prompt, ok := r.try(ctx, r.claude, claudeRouterTimeout, input, "Claude"); ok {
-		return result, "Claude", prompt, nil
-	}
-
-	// Layer 3: Gemini (API)
-	if result, prompt, ok := r.try(ctx, r.gemini, geminiRouterTimeout, input, "Gemini"); ok {
-		return result, "Gemini", prompt, nil
-	}
-
-	// Layer 4: ai CLI (Legacy)
-	if result, prompt, ok := r.try(ctx, r.aiCLI, aicliRouterTimeout, input, "Gemini-CLI"); ok {
-		return result, "Gemini-CLI", prompt, nil
-	}
-
-	// Layer 5: Fallback (Fallback時はプロンプトなし)
+	// Fallback（プロンプトなし）
 	return FallbackSpeech(Reason(input.Reason), input.Language), "Fallback", "", nil
 }
 
 // BatchGenerate はバッチセリフ生成を試みる。BatchClient を実装しているバックエンドを順に試す。
 func (r *LLMRouter) BatchGenerate(ctx context.Context, req BatchRequest) ([]string, error) {
-	for _, client := range []LLMClient{r.ollama, r.claude, r.gemini, r.aiCLI} {
-		if client == nil || !client.IsAvailable() {
+	for _, layer := range r.orderedLayers() {
+		if layer.client == nil || !layer.client.IsAvailable() {
 			continue
 		}
-		bc, ok := client.(BatchClient)
+		bc, ok := layer.client.(BatchClient)
 		if !ok {
 			continue
 		}
@@ -106,7 +111,7 @@ func (r *LLMRouter) try(ctx context.Context, client LLMClient, timeout time.Dura
 	}
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	
+
 	result, prompt, err := client.Generate(timeoutCtx, input)
 	if err != nil {
 		log.Printf("[DEBUG] %s error: %v", name, err)

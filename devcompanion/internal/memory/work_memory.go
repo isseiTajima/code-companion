@@ -74,31 +74,46 @@ func BuildMemory() (*WorkMemory, error) {
 			continue
 		}
 
-		// コンテキストから作業領域を推測
+		// コンテキストから作業領域・最終活動を推測
 		if ctx, ok := entry["context"].(map[string]interface{}); ok {
 			task, _ := ctx["task"].(string)
 			if area := guessArea(task); area != "" {
 				areaCounts[area]++
 			}
-		}
-		
-		// 最後の有意義な発言から活動を記録
-		if speech, ok := entry["speech"].(string); ok && speech != "" {
-			mem.LastActivity = speech
+			// LastActivity は開発状態から推測（セリフではなく実際の作業内容）
+			state, _ := ctx["state"].(string)
+			if activity := stateToActivity(state, task); activity != "" {
+				mem.LastActivity = activity
+			}
 		}
 	}
 
 	// 頻出エリア Top 2
 	mem.RecentAreas = getTopAreas(areaCounts, 2)
-	
-	// LastActivity をセリフではなく「何をしていたか」に要約（簡易版）
-	// 本来は解析が必要だが、ここでは「前回話した内容」として扱う
-	if len(mem.LastActivity) > 30 {
-		runes := []rune(mem.LastActivity)
-		mem.LastActivity = string(runes[:30]) + "..."
-	}
 
 	return mem, nil
+}
+
+// stateToActivity は state/task からユーザーの作業内容を推測する。
+func stateToActivity(state, task string) string {
+	switch state {
+	case "CODING", "deep_work":
+		if task != "" {
+			return "コーディング中（" + task + "）"
+		}
+		return "コーディング中"
+	case "DEBUGGING":
+		return "デバッグ中"
+	case "BUILDING":
+		return "ビルド中"
+	case "SUCCESS":
+		return "ビルド成功"
+	case "FAIL":
+		return "ビルドエラー対応"
+	case "IDLE":
+		return ""
+	}
+	return ""
 }
 
 func guessArea(task string) string {

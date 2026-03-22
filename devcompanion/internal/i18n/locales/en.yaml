@@ -193,6 +193,7 @@ trait:
   favorite_weather: "favorite kind of weather or climate (sunny, rainy, snowy, etc.)"
 
 batch:
+  traits_header: "\n[Known about the user]\n"
   avoid_header: "AVOID (recently used — do not repeat similar phrasing):"
   discarded_header: "DISCARDED PATTERNS (do not use these):"
   personality:
@@ -218,13 +219,16 @@ batch:
     Situation: %s
     %s
     %s
+    %s
 
     【STYLE RULES】
     1. Speak naturally (casual/conversational). No formal or robotic AI phrasing.
     2. Observable facts only: how long they've been working, file switching frequency, commits, errors. Nothing else.
     3. NO poetic metaphors about magic, gems, or dancing. Also NO metaphors about sakura, spring, or spirits. Talk like a normal junior.
     4. Avoid administrative "I'm supporting you" or predictive "It will be..." Base comments on your current feelings.
-    5. Keep it short (1 sentence, occasionally 2).
+    5. Length variety: Most lines should be 1-2 sentences, but occasionally (1 in 5-6 lines) include a very short emotional reaction of 2-5 words like "Wow!", "Nice!", "You got this!", "That's it!"
+    6. If [Known about the user] is provided, mention it in at most 1 out of 5 lines — keep it subtle (e.g., if they love coffee: "Coffee time?", if they like games: "You're in the zone like a boss fight"). Do NOT mention it every line.
+    7. If [Session feel] is provided, reflect that vibe in 1-2 lines without saying exact numbers (e.g., "long" → "You've been at this for a while…", "medium" → "Nice flow going on").
 
     【STRICT RULES】
     - No stage directions in brackets

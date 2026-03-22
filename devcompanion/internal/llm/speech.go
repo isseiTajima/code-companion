@@ -20,20 +20,22 @@ import (
 
 // SpeechGenerator はLLMを使用してセリフを生成する。
 type SpeechGenerator struct {
-	mu                sync.RWMutex
-	router            *LLMRouter
-	cache             *SpeechCache
-	state             *SpeechState
-	freq              *FrequencyController
-	pool              *SpeechPool
-	currentMood       MoodState
-	successStreak     int
-	failStreak        int
-	sameFileEditCount int
-	usingFallback     bool
-	lastSpeech        string // 前回の発言を保持
-	lastDetails       string // 前回の作業対象を保持
-	poolLanguage      string // プール補充時に使用する言語設定
+	mu                  sync.RWMutex
+	router              *LLMRouter
+	cache               *SpeechCache
+	state               *SpeechState
+	freq                *FrequencyController
+	pool                *SpeechPool
+	currentMood         MoodState
+	successStreak       int
+	failStreak          int
+	sameFileEditCount   int
+	usingFallback       bool
+	lastSpeech          string    // 前回の発言を保持
+	lastDetails         string    // 前回の作業対象を保持
+	poolLanguage        string    // プール補充時に使用する言語設定
+	codingSessionStart  time.Time // 現在のコーディングセッション開始時刻
+	lastCodingEventAt   time.Time // 最後にコーディングイベントを受けた時刻
 }
 
 // NewSpeechGenerator は SpeechGenerator を作成する。
@@ -76,21 +78,68 @@ func (sg *SpeechGenerator) prewarmPools(language, userName string, prof profile.
 		go func(personality, category string) {
 			defer wg.Done()
 			key := poolKey(personality, category, language)
-			sg.triggerRefill(key, personality, "normal", category, language, userName, prof)
+			sg.triggerRefill(key, personality, "normal", category, language, userName, prof, "")
 		}(p.personality, p.category)
 	}
 	wg.Wait()
 	// log.Printf("[POOL] Prewarm complete for language=%s", language)
 }
 
-// highPriorityReason は TryLock でなく Lock() を使うべき高優先度 Reason。
-// これらは必ず発話されなければならず、別の Generate 実行中でもドロップしてはいけない。
-func highPriorityReason(r Reason) bool {
-	switch r {
-	case ReasonGreeting, ReasonInitSetup, ReasonUserQuestion, ReasonQuestionAnswered, ReasonUserClick:
-		return true
+// reasonMeta は各 Reason の性質をまとめたテーブル。
+// 新しい Reason を追加する際はここに1行追記するだけでよい。
+type reasonMeta struct {
+	highPriority bool   // true = mu.Lock()（必ず発話）、false = TryLock（スキップ可）
+	poolCategory string // "heartbeat" / "working" / "achievement" / "struggle" / "greeting"
+	eventContext string // OllamaInput.Event に渡す文字列（空文字はデフォルト）
+	alwaysSpeak  bool   // true = クールダウン無視で必ず発話
+	isRoutine    bool   // true = SpeechFrequency 連動インターバル制御
+	webCooldown  bool   // true = 専用 3 分クールダウン（WebBrowsing 専用）
+}
+
+var reasonTable = map[Reason]reasonMeta{
+	// --- 高優先度（必ず発話） ---
+	ReasonGreeting:         {highPriority: true, poolCategory: "greeting", eventContext: "greeting", alwaysSpeak: true},
+	ReasonInitSetup:        {highPriority: true, poolCategory: "greeting", alwaysSpeak: true},
+	ReasonUserQuestion:     {highPriority: true, poolCategory: "greeting", alwaysSpeak: true},
+	ReasonQuestionAnswered: {highPriority: true, poolCategory: "greeting", alwaysSpeak: true},
+	ReasonUserClick:        {highPriority: true, poolCategory: "greeting", alwaysSpeak: true},
+	// --- alwaysSpeak（クールダウン無視） ---
+	ReasonDevSessionStarted:     {poolCategory: "greeting", alwaysSpeak: true},
+	ReasonAISessionStarted:      {poolCategory: "greeting", alwaysSpeak: true},
+	ReasonGitCommit:             {poolCategory: "achievement", alwaysSpeak: true},
+	ReasonGitPush:               {poolCategory: "achievement", alwaysSpeak: true},
+	// --- 通常発話（SpeechFrequency 連動） ---
+	ReasonActiveEdit:             {poolCategory: "working", isRoutine: true},
+	ReasonDocWriting:             {poolCategory: "working", isRoutine: true},
+	ReasonAISessionActive:        {poolCategory: "working", isRoutine: true},
+	ReasonProductiveToolActivity: {poolCategory: "working", isRoutine: true},
+	ReasonNightWork:              {poolCategory: "working", isRoutine: true},
+	ReasonIdle:                   {poolCategory: "heartbeat", isRoutine: true},
+	ReasonLongInactivity:         {poolCategory: "struggle", isRoutine: true},
+	ReasonInitObservation:        {poolCategory: "working", isRoutine: true},
+	ReasonInitSupport:            {poolCategory: "working", isRoutine: true},
+	ReasonInitCuriosity:          {poolCategory: "working", isRoutine: true},
+	ReasonInitMemory:             {poolCategory: "working", isRoutine: true},
+	// --- 専用クールダウン ---
+	ReasonWebBrowsing: {poolCategory: "working", webCooldown: true},
+	// --- 状態変化トリガー ---
+	ReasonSuccess:      {poolCategory: "achievement", eventContext: "build_success"},
+	ReasonFail:         {poolCategory: "struggle", eventContext: "build_failed"},
+	ReasonGitAdd:       {poolCategory: "achievement"},
+	ReasonThinkingTick: {poolCategory: "heartbeat"},
+}
+
+// reasonInfo は reasonTable から取得する。未登録の Reason は greeting カテゴリのデフォルト値を返す。
+func reasonInfo(r Reason) reasonMeta {
+	if m, ok := reasonTable[r]; ok {
+		return m
 	}
-	return false
+	return reasonMeta{poolCategory: "greeting"}
+}
+
+// highPriorityReason は TryLock でなく Lock() を使うべき高優先度 Reason。
+func highPriorityReason(r Reason) bool {
+	return reasonInfo(r).highPriority
 }
 
 func (sg *SpeechGenerator) Generate(e monitor.MonitorEvent, cfg *config.Config, reason Reason, prof profile.DevProfile, question string) (string, string, string) {
@@ -219,6 +268,30 @@ func (sg *SpeechGenerator) generateTextLocked(e monitor.MonitorEvent, cfg *confi
 	sg.lastDetails = e.Details
 	sg.poolLanguage = cfg.Language
 
+	// コーディングセッション継続時間を自前で管理する。
+	// e.Session.StartTime はアプリ起動時刻で変わらないため使用不可。
+	const codingIdleTimeout = 30 * time.Minute
+	isCodingEvent := e.State == types.StateCoding || e.State == types.StateDeepWork ||
+		reason == ReasonActiveEdit || reason == ReasonGitCommit || reason == ReasonGitPush
+	if isCodingEvent {
+		if sg.codingSessionStart.IsZero() || now.Sub(sg.lastCodingEventAt) > codingIdleTimeout {
+			sg.codingSessionStart = now // アイドル後の再開でリセット
+		}
+		sg.lastCodingEventAt = now
+	}
+	workingDuration := ""
+	if isCodingEvent && !sg.codingSessionStart.IsZero() {
+		mins := int(now.Sub(sg.codingSessionStart).Minutes())
+		switch {
+		case mins >= 120:
+			workingDuration = "long"
+		case mins >= 30:
+			workingDuration = "medium"
+		case mins >= 10:
+			workingDuration = "short"
+		}
+	}
+
 	// 生成戦略を strategy.go のテーブルで決定する。
 	// 新しい Reason を追加した際は strategy.go の reasonStrategies に追記する。
 	if strategyFor(reason, question != "") == StrategyDirect {
@@ -241,7 +314,7 @@ func (sg *SpeechGenerator) generateTextLocked(e monitor.MonitorEvent, cfg *confi
 			continue
 		}
 		if sg.pool.NeedsRefill(key) {
-			go sg.triggerRefill(key, personality, string(cfg.RelationshipMode), category, cfg.Language, cfg.UserName, prof)
+			go sg.triggerRefill(key, personality, string(cfg.RelationshipMode), category, cfg.Language, cfg.UserName, prof, workingDuration)
 		}
 		sg.usingFallback = false
 		// プール生成テキスト内の〇〇プレースホルダーをユーザー名に置換
@@ -261,7 +334,7 @@ func (sg *SpeechGenerator) generateTextLocked(e monitor.MonitorEvent, cfg *confi
 	}
 
 	// プールが空または全試行が重複: 非同期補充してフォールバック
-	go sg.triggerRefill(key, personality, string(cfg.RelationshipMode), category, cfg.Language, cfg.UserName, prof)
+	go sg.triggerRefill(key, personality, string(cfg.RelationshipMode), category, cfg.Language, cfg.UserName, prof, workingDuration)
 	sg.usingFallback = true
 	return sg.fallbackSpeech(reason, cfg), "[FALLBACK-POOL]", "Fallback"
 }
@@ -362,7 +435,7 @@ func (sg *SpeechGenerator) generateDirect(e monitor.MonitorEvent, cfg *config.Co
 }
 
 // triggerRefill はバックグラウンドでプールを補充する。
-func (sg *SpeechGenerator) triggerRefill(key, personality, relationship, category, language, userName string, prof profile.DevProfile) {
+func (sg *SpeechGenerator) triggerRefill(key, personality, relationship, category, language, userName string, prof profile.DevProfile, workingDuration string) {
 	if sg.pool.IsRefilling(key) {
 		return
 	}
@@ -387,16 +460,18 @@ func (sg *SpeechGenerator) triggerRefill(key, personality, relationship, categor
 	}
 
 	req := BatchRequest{
-		Personality:        personality,
-		RelationshipMode:   relationship,
-		Category:           category,
-		Language:           language,
-		UserName:           userName,
-		LearnedTraits:      make(map[string]float64),
-		LearnedTraitLabels: traitLabels,
-		Count:              poolBatchSize,
-		RecentLines:        recentLines,
-		DiscardedPatterns:  discardedPatterns,
+		Personality:           personality,
+		RelationshipMode:      relationship,
+		Category:              category,
+		Language:              language,
+		UserName:              userName,
+		LearnedTraits:         make(map[string]float64),
+		LearnedTraitLabels:    traitLabels,
+		PersonalMemorySummary: buildPersonalMemorySummary(prof.PersonalMemories, language),
+		WorkingDuration:       workingDuration,
+		Count:                 poolBatchSize,
+		RecentLines:           recentLines,
+		DiscardedPatterns:     discardedPatterns,
 	}
 
 	for k, v := range prof.Personality.Traits {
@@ -475,31 +550,11 @@ func (sg *SpeechGenerator) triggerRefill(key, personality, relationship, categor
 
 // poolCategory はイベントの理由からプールカテゴリを返す。
 func poolCategory(reason Reason) string {
-	switch reason {
-	case ReasonThinkingTick, ReasonIdle:
-		return "heartbeat"
-	case ReasonActiveEdit, ReasonDocWriting, ReasonAISessionActive, ReasonProductiveToolActivity:
-		return "working"
-	case ReasonSuccess, ReasonGitCommit, ReasonGitPush:
-		return "achievement"
-	case ReasonFail, ReasonLongInactivity:
-		return "struggle"
-	default:
-		return "greeting"
-	}
+	return reasonInfo(reason).poolCategory
 }
 
 func reasonToEventContext(reason Reason) string {
-	switch reason {
-	case ReasonSuccess:
-		return "build_success"
-	case ReasonFail:
-		return "build_failed"
-	case ReasonGreeting:
-		return "greeting"
-	default:
-		return ""
-	}
+	return reasonInfo(reason).eventContext
 }
 
 func humanizeBehavior(b, lang string) string {
@@ -689,19 +744,14 @@ func isValidSpeechForLang(s, lang string) bool {
 		// サービス業口調
 		"お手伝いできること", "お力になれ", "サポートさせ", "かしこまりました",
 		// 物理的に見えない・聞こえないものへの言及
-		"顔色", "キーボードを叩く音", "キーボードの音",
-		// コード内容・見た目言及（さくらはコードの中身・色・見た目を見ることができない）
-		"コードの色", "コードが綺麗", "コードが読みやす", "コードが見やす",
-		"コードが整理", "コードが形", "コードが伸び",
-		"見やすいコード", "見やすい配置", "見やすくなっ",
-		"綺麗になって", "綺麗なコード", "形になって",
-		// 顔・表情言及（さくらはユーザーの顔を見ることができない）
-		"難しい顔", "難しそうな顔", "真剣な顔", "いい顔", "顔色",
-		// 五感禁止（さくらは嗅覚・聴覚・触覚を持たない）
+		"キーボードを叩く音", "キーボードの音",
+		// 顔・表情言及
+		"難しい顔", "難しそうな顔", "真剣な顔", "いい顔してる", "顔色",
+		// 五感禁止
 		"コーヒーの香り", "コーヒーの匂い", "いい香り", "香りがし",
 		// 意味不明パターン
 		"的样子",
-		// さくらが操作・行動するかのような表現（さくらはシステムを操作できない）
+		// さくらが操作・行動するかのような表現
 		"配置変えました", "確認してきます", "確認してみます", "見てきます",
 		"調べてきます", "やってきます", "直しておきます", "開いておきます",
 		"やっておきます", "しておきます",
@@ -710,6 +760,12 @@ func isValidSpeechForLang(s, lang string) bool {
 		if strings.Contains(s, b) {
 			return false
 		}
+	}
+	// コード見た目・内容言及を正規表現で包括的にチェック
+	// 「コード」と「綺麗/見やすい/読みやすい/整理/色/形」の組み合わせを禁止
+	codeAppearanceRe := regexp.MustCompile(`コード.{0,8}(綺麗|きれい|見やす|読みやす|整理|整っ|揃|形に|伸び|の色|色が)|(綺麗|きれい|見やす|読みやす|整理).{0,8}コード|形になって|見やすい配置|見やすくなっ`)
+	if codeAppearanceRe.MatchString(s) {
+		return false
 	}
 
 	// 日本語（ひらがな・カタカナ・漢字）が全く含まれていないのはNG
@@ -817,16 +873,7 @@ func (fc *FrequencyController) ShouldSpeak(reason Reason, state types.ContextSta
 	defer fc.mu.Unlock()
 
 	// 常に発話するイベント（クールダウン無視）
-	alwaysSpeak := reason == ReasonUserClick ||
-		reason == ReasonGreeting ||
-		reason == ReasonInitSetup ||
-		reason == ReasonDevSessionStarted ||
-		reason == ReasonAISessionStarted ||
-		reason == ReasonGitCommit ||
-		reason == ReasonGitPush ||
-		reason == ReasonUserQuestion ||
-		reason == ReasonQuestionAnswered
-	if alwaysSpeak {
+	if reasonInfo(reason).alwaysSpeak {
 		return true
 	}
 
@@ -836,7 +883,7 @@ func (fc *FrequencyController) ShouldSpeak(reason Reason, state types.ContextSta
 	}
 
 	// Webブラウジングは専用クールダウン（3分）で制御
-	if reason == ReasonWebBrowsing {
+	if reasonInfo(reason).webCooldown {
 		if !fc.lastWebSpeakTime.IsZero() && now.Sub(fc.lastWebSpeakTime) < 3*time.Minute {
 			return false
 		}
@@ -844,18 +891,7 @@ func (fc *FrequencyController) ShouldSpeak(reason Reason, state types.ContextSta
 	}
 
 	// 通常イベント: SpeechFrequency 連動インターバル + 重要イベント直後2分抑制
-	isRoutine := reason == ReasonActiveEdit ||
-		reason == ReasonDocWriting ||
-		reason == ReasonAISessionActive ||
-		reason == ReasonProductiveToolActivity ||
-		reason == ReasonNightWork ||
-		reason == ReasonIdle ||
-		reason == ReasonLongInactivity ||
-		reason == ReasonInitObservation ||
-		reason == ReasonInitSupport ||
-		reason == ReasonInitCuriosity ||
-		reason == ReasonInitMemory
-	if isRoutine {
+	if reasonInfo(reason).isRoutine {
 		// 重要イベント（コミット・エラー等）直後2分間は通常発話を抑制
 		// → 重要セリフの余韻を守る
 		const postImportantSuppression = 2 * time.Minute

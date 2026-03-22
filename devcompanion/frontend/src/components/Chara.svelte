@@ -9,6 +9,9 @@
   import c3Sad1 from '../assets/pixel-chara3.png'
   import c3Sad2 from '../assets/pixel-chara3-2.png'
 
+  import c4PC1 from '../assets/pixel-chara4-pc1.png'
+  import c4PC2 from '../assets/pixel-chara4-pc2.png'
+
   let { 
     status = 'Idle', 
     mood = 'Neutral', 
@@ -21,58 +24,54 @@
   // 目パチの状態管理
   let eyeState = $state(0) // 0:open, 1:half, 2:close
   let blinkTimer: ReturnType<typeof setTimeout>
-// 強い喜びの維持用
-let joyTimer: ReturnType<typeof setTimeout> | null = null
-let forceHappy = $state(false)
-let joyFrame = $state(0)
-let joyFrameTimer: ReturnType<typeof setInterval> | null = null
 
-// 悲しみの固有アニメーション用
-let sadFrame = $state(0)
-let sadTimer: ReturnType<typeof setInterval> | null = null
+  // 喜びアニメーション用
+  let joyFrame = $state(0)
+  let joyFrameTimer: ReturnType<typeof setInterval> | null = null
 
-$effect(() => {
-  // 喜びの処理
-  if (mood === 'StrongJoy' || mood === 'Positive' || forceHappy) {
-    if (!joyFrameTimer) {
-      joyFrameTimer = setInterval(() => {
-        joyFrame = (joyFrame + 1) % 2
-      }, 500)
-    }
+  // 悲しみの固有アニメーション用
+  let sadFrame = $state(0)
+  let sadTimer: ReturnType<typeof setInterval> | null = null
 
-    // 新規イベント時のみタイマーをリセット
+  // PC作業（集中）のアニメーション用
+  let pcFrame = $state(0)
+  let pcTimer: ReturnType<typeof setInterval> | null = null
+
+  $effect(() => {
+    // 喜び: mood prop が直接示している間だけアニメーション
     if (mood === 'StrongJoy' || mood === 'Positive') {
-      forceHappy = true
-      if (joyTimer) clearTimeout(joyTimer)
-      joyTimer = setTimeout(() => {
-        forceHappy = false
-      }, 8000)
+      if (!joyFrameTimer) {
+        joyFrameTimer = setInterval(() => { joyFrame = (joyFrame + 1) % 2 }, 500)
+      }
+    } else {
+      if (joyFrameTimer) { clearInterval(joyFrameTimer); joyFrameTimer = null }
+      joyFrame = 0
     }
-  } else {
-    if (joyFrameTimer) {
-      clearInterval(joyFrameTimer)
-      joyFrameTimer = null
-    }
-  }
 
-  // 悲しみの処理
-  if (mood === 'Sadness' || mood === 'Negative') {
-    if (!sadTimer) {
-      sadTimer = setInterval(() => {
-        sadFrame = (sadFrame + 1) % 2
-      }, 500)
+    // 悲しみ
+    if (mood === 'Sadness' || mood === 'Negative') {
+      if (!sadTimer) {
+        sadTimer = setInterval(() => { sadFrame = (sadFrame + 1) % 2 }, 500)
+      }
+    } else {
+      if (sadTimer) { clearInterval(sadTimer); sadTimer = null }
+      sadFrame = 0
     }
-  } else {
-    if (sadTimer) {
-      clearInterval(sadTimer)
-      sadTimer = null
+
+    // PC作業（集中）
+    if (mood === 'Focus') {
+      if (!pcTimer) {
+        pcTimer = setInterval(() => { pcFrame = (pcFrame + 1) % 2 }, 500)
+      }
+    } else {
+      if (pcTimer) { clearInterval(pcTimer); pcTimer = null }
+      pcFrame = 0
     }
-  }
-})
+  })
 
 function blink() {
-  if (mood === 'Sadness' || mood === 'Negative' || mood === 'StrongJoy' || mood === 'Positive' || forceHappy) {
-    // 特殊表情中はまばたきを止める
+  if (mood === 'Sadness' || mood === 'Negative' || mood === 'StrongJoy' || mood === 'Positive' || mood === 'Focus') {
+    // 特殊表情中や作業中はまばたきを止める
     blinkTimer = setTimeout(blink, 1000)
     return
   }
@@ -94,9 +93,9 @@ function blink() {
     blinkTimer = setTimeout(blink, 3000)
     return () => {
       clearTimeout(blinkTimer)
-      if (joyTimer) clearTimeout(joyTimer)
       if (joyFrameTimer) clearInterval(joyFrameTimer)
       if (sadTimer) clearInterval(sadTimer)
+      if (pcTimer) clearInterval(pcTimer)
     }
   })
 
@@ -104,13 +103,18 @@ function blink() {
 
   // 状態に応じた画像選択
   const currentImg = $derived.by(() => {
+    // PC作業（集中）
+    if (mood === 'Focus') {
+      return pcFrame === 0 ? c4PC1 : c4PC2
+    }
+
     // 悲しみ状態
     if (mood === 'Sadness' || mood === 'Negative') {
       return sadFrame === 0 ? c3Sad1 : c3Sad2
     }
 
-    // 喜び状態（強い喜び、軽い喜び、または維持期間中）
-    if (mood === 'StrongJoy' || mood === 'Positive' || forceHappy) {
+    // 喜び状態
+    if (mood === 'StrongJoy' || mood === 'Positive') {
       return joyFrame === 0 ? c2Happy1 : c2Happy2
     }
     

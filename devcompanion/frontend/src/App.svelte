@@ -174,6 +174,8 @@
 
   const isRightSide = $derived(cfg.window_position?.endsWith('right'))
   const isTopSide = $derived(cfg.window_position?.startsWith('top'))
+  // バルーンが消えたら即座にニュートラルに戻す
+  const displayedMood = $derived(isTalking ? appMood : 'Neutral')
 </script>
 
 <main>
@@ -191,10 +193,10 @@
     </div>
     
     <div class="chara-flip-wrapper" style="transform: scaleX({isRightSide ? -1 : 1}); pointer-events: {(showSettings || showOnboarding || !!currentQuestion) ? 'auto' : 'none'};">
-      <Chara 
-        status={appStatus} 
-        mood={appMood} 
-        scale={cfg.scale} 
+      <Chara
+        status={appStatus}
+        mood={displayedMood}
+        scale={cfg.scale}
         isTalking={isTalking}
         onClick={handleCharaClick}
       />

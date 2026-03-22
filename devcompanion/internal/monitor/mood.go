@@ -40,12 +40,18 @@ func InferMood(ev MonitorEvent) MoodType {
 	r := rand.Float64()
 
 	switch ev.State {
+	case types.StateDeepWork:
+		return MoodFocus
+
 	case types.StateCoding:
 		if ev.Task == TaskGenerateCode || ev.Task == TaskDebug {
-			return MoodFocus // デバッグ・コード生成中は確率に関係なく集中顔
+			return MoodFocus // デバッグ・コード生成中は常に集中顔
 		}
 		if r < 0.25 { // 25%の確率で「作業が楽しい（Positive）」
 			return MoodPositive
+		}
+		if r > 0.70 { // 30%の確率で「作業に没頭（Focus）」
+			return MoodFocus
 		}
 		return MoodNeutral
 

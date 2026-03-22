@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	DeepWorkActivityThreshold = 5    // files changed in 10 mins
+	DeepWorkActivityThreshold = 15   // 15イベント連続でDeepWork判定（5だと即quiet化して単調になる）
 	DeepWorkDurationThreshold = 10 * time.Minute
 	StrugglingThreshold       = 3    // failed builds in a row
 )
@@ -92,14 +92,23 @@ func (s *SituationEngine) inferEmotion() types.EmotionState {
 			s.activityCount = 0
 		}
 	}
-	if s.world.IsDeepWork {
-		return types.EmotionQuiet
-	}
+
+	// エラー中は常に concerned
 	if s.world.StrugglingLevel > 0.5 {
 		return types.EmotionConcerned
 	}
+	// 勢いがある（コミット直後など）は excited
 	if s.world.Momentum > 0.6 {
 		return types.EmotionExcited
+	}
+	// DeepWork中でも単調にならないよう、作業量で分岐
+	// activityCount が多い＝長時間集中 → supportive で励ます
+	if s.world.IsDeepWork {
+		if s.activityCount > 30 {
+			// 長時間集中: 応援モード
+			return types.EmotionSupportive
+		}
+		return types.EmotionQuiet
 	}
 	return types.EmotionSupportive
 }

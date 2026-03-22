@@ -367,13 +367,10 @@ func buildBatchPrompt(req BatchRequest) string {
 		userName = "先輩"
 	}
 
+	traitsHeader := i18n.T(lang, "batch.traits_header")
 	traitsSection := ""
 	if len(req.LearnedTraitLabels) > 0 {
-		if lang == "en" {
-			traitsSection = "\n[Known about the user]\n"
-		} else {
-			traitsSection = "\n【先輩について分かっていること】\n"
-		}
+		traitsSection = traitsHeader
 		for id, answer := range req.LearnedTraitLabels {
 			label := i18n.T(lang, "trait."+id)
 			if label == "trait."+id {
@@ -383,11 +380,7 @@ func buildBatchPrompt(req BatchRequest) string {
 		}
 	} else if len(req.LearnedTraits) > 0 {
 		// 後方互換: LearnedTraitLabels がない場合は float を使う
-		if lang == "en" {
-			traitsSection = "\n[Known about the user]\n"
-		} else {
-			traitsSection = "\n【先輩について分かっていること】\n"
-		}
+		traitsSection = traitsHeader
 		for id, val := range req.LearnedTraits {
 			label := i18n.T(lang, "trait."+id)
 			if label == "trait."+id {
@@ -397,9 +390,44 @@ func buildBatchPrompt(req BatchRequest) string {
 		}
 	}
 
+	// 個人情報サマリーを traitsSection に追記
+	if req.PersonalMemorySummary != "" {
+		if traitsSection == "" {
+			traitsSection = traitsHeader
+		}
+		traitsSection += req.PersonalMemorySummary + "\n"
+	}
+
+	// 作業時間コンテキスト（ラベルのみ、具体的な分数は渡さない）
+	workTimeSection := ""
+	if req.WorkingDuration != "" {
+		var label string
+		if lang == "en" {
+			switch req.WorkingDuration {
+			case "short":
+				label = "just getting warmed up (about 10-30 min)"
+			case "medium":
+				label = "in the flow for a while (about 30-120 min)"
+			case "long":
+				label = "been at it for a long time (2+ hours)"
+			}
+			workTimeSection = fmt.Sprintf("\n[Session feel: %s]\n", label)
+		} else {
+			switch req.WorkingDuration {
+			case "short":
+				label = "作業し始めたばかり（10〜30分程度）"
+			case "medium":
+				label = "しばらく集中が続いている（30分〜2時間程度）"
+			case "long":
+				label = "かなり長い時間ぶっ通しで作業中（2時間超）"
+			}
+			workTimeSection = fmt.Sprintf("\n【作業の感じ: %s】\n", label)
+		}
+	}
+
 	tmpl := i18n.T(lang, "batch.template")
-	// tmpl must handle: userName, count, count, userName, pd, md, cd, traitsSection, avoidSection
-	return fmt.Sprintf(tmpl, userName, req.Count, req.Count, userName, pd, md, cd, traitsSection, avoidSection)
+	// tmpl must handle: userName, count, count, userName, pd, md, cd, traitsSection, workTimeSection, avoidSection
+	return fmt.Sprintf(tmpl, userName, req.Count, req.Count, userName, pd, md, cd, traitsSection, workTimeSection, avoidSection)
 }
 
 // listPrefixRe は Unicode 数字（全角・ベンガル等を含む）から始まる番号付きリストの行頭を除去する。
