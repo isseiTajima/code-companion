@@ -125,10 +125,8 @@ function blink() {
   })
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div 
-  class="chara-wrapper"
+<button
+  class="chara-button"
   class:talking={isTalking}
   class:flipped={flipped}
   onclick={onClick}
@@ -139,10 +137,10 @@ function blink() {
     class="pixel-art"
     style="width: {Math.round(128 * scale)}px"
   />
-</div>
+</button>
 
 <style>
-  .chara-wrapper {
+  .chara-button {
     display: inline-block;
     line-height: 0;
     width: auto;
@@ -150,17 +148,20 @@ function blink() {
     animation: floating 3s ease-in-out infinite;
     cursor: pointer;
     transition: transform 0.2s, opacity 0.5s;
-    opacity: 0.8; /* 以前より少し濃く */
+    opacity: 0.8;
+    background: none;
+    border: none;
+    padding: 0;
   }
 
-  .chara-wrapper.flipped {
+  .chara-button.flipped {
     transform: scaleX(-1) !important;
   }
-  .chara-wrapper.flipped img {
-    transform: scaleX(1); 
+  .chara-button.flipped img {
+    transform: scaleX(1);
   }
 
-  .chara-wrapper.talking {
+  .chara-button.talking {
     opacity: 1;
   }
 

@@ -20,7 +20,7 @@
   } = $props()
 
   let timer: ReturnType<typeof setTimeout> | null = null
-  const maxLength = 200
+  const maxLength = 40
 
   let showInstallButton = $state(false)
   let displayText = $state('')
@@ -62,8 +62,7 @@
 
     visible = true
     if (!showInstallButton) {
-      const duration = Math.min(15000, 8000 + (displayText.length * 150))
-      timer = setTimeout(() => { visible = false }, duration)
+      timer = setTimeout(() => { visible = false }, 4000)
     }
   })
 
@@ -126,7 +125,11 @@
       {/if}
       
       <p class="balloon-text">{trimmed}</p>
-      
+
+      {#if usingFallback}
+        <span class="fallback-label">🔄</span>
+      {/if}
+
       {#if showInstallButton}
         <button class="install-btn" onclick={handleInstall}>
           今すぐインストール
