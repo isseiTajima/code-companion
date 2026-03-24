@@ -379,6 +379,7 @@ func (sg *SpeechGenerator) generateDirect(e monitor.MonitorEvent, cfg *config.Co
 		LearnedTraits:         make(map[string]float64),
 		LearnedTraitLabels:    make(map[string]string),
 		RandomSeed:            time.Now().UnixNano() % 100000,
+		IsAISession:           e.IsAISession,
 	}
 
 	for k, v := range prof.Personality.Traits {

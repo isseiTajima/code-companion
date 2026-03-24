@@ -132,8 +132,9 @@ func (e *Engine) Run(ctx context.Context) {
 			eventObj := types.Event{
 				Type: "monitor_event",
 				Payload: map[string]interface{}{
-					"state": string(ev.State),
-					"task":  string(ev.Task),
+					"state":             string(ev.State),
+					"task":              string(ev.Task),
+					"high_level_event":  string(ev.Event),
 				},
 			}
 
@@ -185,6 +186,9 @@ func (e *Engine) Run(ctx context.Context) {
 func (e *Engine) handleAndNotify(eventType string, eventObj types.Event, ev monitor.MonitorEvent, reason llm.Reason, confidence float64) {
 	world, emotion := e.situation.ProcessEvent(eventObj)
 	e.learning.ProcessEvent(eventObj)
+
+	// world.IsAISession を ev に反映して speech generator に伝える
+	ev.IsAISession = world.IsAISession
 
 	prof := e.profile.Get()
 	text, prompt, backend := e.speech.Generate(ev, e.cfg, reason, prof, "")

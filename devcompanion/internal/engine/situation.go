@@ -54,8 +54,14 @@ func (s *SituationEngine) ProcessEvent(ev types.Event) (types.WorldModel, types.
 			s.world.StrugglingLevel = 0.0
 			s.world.Momentum += 0.2
 		}
-		
-		if state == string(types.StateDeepWork) || state == string(types.StateCoding) {
+
+		// AIセッション（バイブコーディング）中はDeepWorkを発動しない
+		highLevelEvent, _ := ev.Payload["high_level_event"].(string)
+		if highLevelEvent == string(types.EventAISessionStarted) || highLevelEvent == string(types.EventAISessionActive) {
+			s.world.IsAISession = true
+		}
+
+		if !s.world.IsAISession && (state == string(types.StateDeepWork) || state == string(types.StateCoding)) {
 			s.activityCount++
 			s.lastDeepWorkAt = time.Now()
 			if s.activityCount >= DeepWorkActivityThreshold {
@@ -68,6 +74,7 @@ func (s *SituationEngine) ProcessEvent(ev types.Event) (types.WorldModel, types.
 		obsType := ev.Payload["type"].(string)
 		if obsType == "idle_start" {
 			s.world.IsDeepWork = false
+			s.world.IsAISession = false
 			s.activityCount = 0
 		}
 	}

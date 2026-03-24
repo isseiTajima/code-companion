@@ -15,6 +15,8 @@
 - 作業対象: {{.Details}}{{end}}
 {{- if .SessionMode}}
 - セッション: {{.SessionMode}}{{end}}
+{{- if .IsAISession}}
+- 作業スタイル: バイブコーディング（AIエージェントがコードを書いている。先輩はコードを手で書いているのではなく、AIに指示を出して監督・確認をしている）{{end}}
 {{if .WorkMemory}}
 [最近の作業メモリ]
 {{.WorkMemory}}

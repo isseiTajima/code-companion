@@ -168,6 +168,7 @@ const (
 // WorldModel represents Sakura's interpretation of the developer's situation.
 type WorldModel struct {
 	IsDeepWork      bool      `json:"is_deep_work"`
+	IsAISession     bool      `json:"is_ai_session"`    // AIエージェントが動いている（バイブコーディング中）
 	StrugglingLevel float64   `json:"struggling_level"` // 0.0 - 1.0
 	Momentum        float64   `json:"momentum"`         // 0.0 - 1.0
 	LastActive      string    `json:"last_active"`

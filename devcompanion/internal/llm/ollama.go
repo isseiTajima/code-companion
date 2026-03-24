@@ -96,6 +96,7 @@ type OllamaInput struct {
 	LearnedTraitLabels   map[string]string  // 学習済み特性のテキストラベル（回答内容）
 	PersonalMemorySummary string            // ユーザーの会話から得た個人情報のサマリー（複数行）
 	RandomSeed           int64              // 毎回異なる値を注入してプロンプトの一意性を保証
+	IsAISession          bool               // AIエージェントが動いている（バイブコーディング中）
 }
 
 // OllamaClient はOllama APIのクライアント。

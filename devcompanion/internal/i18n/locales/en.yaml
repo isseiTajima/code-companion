@@ -2,8 +2,9 @@ speech:
   fallback:
     init_setup: "I'mさくら! Please give me the 'power to think' so we can talk more! [INSTALL_OLLAMA]"
     thinking_tick:
-      - "Concentrating...!"
-      - "Go for it!"
+      - "Still watching."
+      - "How's it going?"
+      - "Anything new?"
     success:
       - "Yes, you did it!"
       - "Looking good!"
@@ -37,17 +38,17 @@ speech:
       - "Working late? Take care of yourself."
       - "Don't push yourself too hard!"
     active_edit:
-      - "You're on fire!"
-      - "Writing a lot of code, huh?"
-      - "Deep in the zone!"
+      - "Things are moving along."
+      - "Lots of changes happening."
+      - "Something's coming together."
     ai_session_started:
-      - "AI agent, activated!"
-      - "Your partner is ready!"
-      - "Let's do this together!"
+      - "Vibe coding session — let's see what you're building!"
+      - "AI's on it. What are you making?"
+      - "You're steering, the AI's typing — nice."
     ai_session_active:
-      - "The AI is working hard!"
-      - "Reliable partner, right?"
-      - "Great teamwork!"
+      - "What's going through your head right now?"
+      - "Mind if I keep watching?"
+      - "Getting used to working this way?"
     dev_session_started:
       - "Development session, start!"
       - "Let's write some code today!"
@@ -73,9 +74,10 @@ speech:
       - "Noted! I feel like I understand you a bit better now!"
     # Proactive Initiatives
     initiative_observation:
-      - "That code looked really clean!"
       - "Development is going well, I see."
-      - "I'm learning so much just watching you!"
+      - "I'm learning just watching you."
+      - "Working with AI is fast, isn't it."
+      - "Can you tell me what you're building later?"
     initiative_support:
       - "Great work today!"
       - "I'm always impressed by your hard work."

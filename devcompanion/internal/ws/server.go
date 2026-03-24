@@ -43,7 +43,8 @@ func (s *Server) SetCommandHandler(handler func(e Event)) {
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleWS)
-	mux.HandleFunc("/trigger", s.handleTrigger) // HTTPエンドポイント追加
+	mux.HandleFunc("/trigger", s.handleTrigger)
+	mux.HandleFunc("/trigger_mood", s.handleTriggerMood) // Mood発火用エンドポイント追加
 	
 	addr := fmt.Sprintf("127.0.0.1:%d", WSPort)
 	return http.ListenAndServe(addr, mux)
@@ -65,6 +66,27 @@ func (s *Server) handleTrigger(w http.ResponseWriter, r *http.Request) {
 			},
 		})
 		fmt.Fprintf(w, "Triggered question for: %s\n", traitID)
+	} else {
+		http.Error(w, "Handler not initialized", http.StatusInternalServerError)
+	}
+}
+
+// handleTriggerMood はHTTP経由でのムード強制発火を受け付ける。
+func (s *Server) handleTriggerMood(w http.ResponseWriter, r *http.Request) {
+	mood := r.URL.Query().Get("mood")
+
+	s.mu.RLock()
+	handler := s.commandHandler
+	s.mu.RUnlock()
+
+	if handler != nil {
+		handler(Event{
+			Type: "trigger_mood",
+			Payload: map[string]interface{}{
+				"mood": mood,
+			},
+		})
+		fmt.Fprintf(w, "Triggered mood: %s\n", mood)
 	} else {
 		http.Error(w, "Handler not initialized", http.StatusInternalServerError)
 	}

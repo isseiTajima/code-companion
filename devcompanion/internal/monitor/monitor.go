@@ -21,15 +21,16 @@ import (
 
 // MonitorEvent はパイプラインの最終出力を表す。
 type MonitorEvent struct {
-	State    types.ContextState   `json:"state"`
-	Task     TaskType             `json:"task"`
-	Mood     MoodType             `json:"mood"`
-	Event    types.HighLevelEvent `json:"event"`
-	Behavior types.Behavior       `json:"behavior"`
-	Session  types.SessionState   `json:"session"`
-	Context  types.ContextInfo    `json:"context"`
-	Decision types.ContextDecision `json:"decision"`
-	Details  string               `json:"details"`
+	State       types.ContextState    `json:"state"`
+	Task        TaskType              `json:"task"`
+	Mood        MoodType              `json:"mood"`
+	Event       types.HighLevelEvent  `json:"event"`
+	Behavior    types.Behavior        `json:"behavior"`
+	Session     types.SessionState    `json:"session"`
+	Context     types.ContextInfo     `json:"context"`
+	Decision    types.ContextDecision `json:"decision"`
+	Details     string                `json:"details"`
+	IsAISession bool                  `json:"is_ai_session"` // AIエージェント実行中（バイブコーディング）
 }
 
 // Monitor はパイプライン（Sensors -> Signals -> Context）を管理する。
