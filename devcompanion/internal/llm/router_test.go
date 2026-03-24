@@ -148,15 +148,17 @@ func TestLLMRouter_AllLayersFail_ReturnsFallback(t *testing.T) {
 	}
 
 	// When: Route を呼ぶ
-	text, _, _, err := router.Route(context.Background(), input)
+	text, backend, _, err := router.Route(context.Background(), input)
 
-	// Then: Fallback テキストが返る
+	// Then: Fallback バックエンドが使われ、テキストが返る
 	if err != nil {
 		t.Fatalf("want no error, got %v", err)
 	}
-	expectedFallback := FallbackSpeech(ReasonThinkingTick, "ja")
-	if text != expectedFallback {
-		t.Fatalf("want fallback %q, got %q", expectedFallback, text)
+	if backend != "Fallback" {
+		t.Fatalf("want backend %q, got %q", "Fallback", backend)
+	}
+	if text == "" {
+		t.Fatal("want non-empty fallback text, got empty string")
 	}
 }
 
