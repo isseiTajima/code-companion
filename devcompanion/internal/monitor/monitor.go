@@ -74,8 +74,6 @@ func New(cfg *config.AppConfig, watchDir string) (*Monitor, error) {
 	m.sensors = append(m.sensors, sensor.NewFSSensor(watchDir))
 	// AIエージェントをプロセス名・コマンドライン両方から動的検知
 	m.sensors = append(m.sensors, sensor.NewAIAgentSensor(3*time.Second))
-	// 通常エディタ監視（AI判定とは別）
-	m.sensors = append(m.sensors, sensor.NewProcessSensor([]string{"vscode", "code", "iterm"}, 5*time.Second))
 	m.sensors = append(m.sensors, sensor.NewWebSensor(5*time.Second))
 
 	if cfg != nil {
