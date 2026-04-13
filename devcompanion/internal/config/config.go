@@ -30,8 +30,16 @@ type Config struct {
 	SpeechFrequency          int      `json:"speech_frequency" yaml:"speech_frequency"`
 	WindowPosition           string   `json:"window_position" yaml:"window_position"` // top-right, bottom-right
 	Language                 string   `json:"language" yaml:"language"`               // ja, en
-	PersonaStyle             types.PersonaStyle   `json:"persona_style" yaml:"persona_style"`
+	PersonaStyle             types.PersonaStyle     `json:"persona_style" yaml:"persona_style"`
 	RelationshipMode         types.RelationshipMode `json:"relationship_mode" yaml:"relationship_mode"`
+	// WeatherLocation は天気取得に使う都市名（空の場合は IP ジオロケーションで自動検出）。
+	// 例: "Maebashi", "Takasaki", "Gunma"
+	WeatherLocation          string                 `json:"weather_location" yaml:"weather_location"`
+	// Dialect はキャラクターが話す方言（空 or "standard" = 標準語, "hakata", "kyoto", "kansai"）。
+	Dialect                  string                 `json:"dialect" yaml:"dialect"`
+	// NewsFeeds はカテゴリ別のカスタム RSS フィード URL。
+	// 未設定カテゴリはデフォルトフィードにフォールバックする。
+	NewsFeeds                map[string][]string    `json:"news_feeds" yaml:"news_feeds"`
 }
 
 type AppConfig struct {
@@ -50,7 +58,7 @@ func DefaultConfig() *Config {
 		Monologue:                true,
 		AlwaysOnTop:              true,
 		Mute:                     false,
-		Model:                    "qwen2.5:4b",
+		Model:                    "qwen3.5:9b",
 		OllamaEndpoint:           "http://localhost:11434/api/generate",
 		LogPaths:                 []string{""},
 		AutoStart:                false,

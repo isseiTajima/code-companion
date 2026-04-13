@@ -47,7 +47,7 @@ func TestFrequencyController_UserClick_AlwaysSpeaks(t *testing.T) {
 func TestSpeechGenerator_Generate_ContainsDetailsAndQuestion(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"message":{"content":"了解しました！"},"done":true}`))
+		_, _ = w.Write([]byte(`{"message":{"content":"ちゃんと進んでますね、いい感じですよ"},"done":true}`))
 	}))
 	defer server.Close()
 

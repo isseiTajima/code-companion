@@ -32,3 +32,13 @@ export function ListOllamaModels():Promise<string[]>;
 export function DeleteModel(arg1:string):Promise<void>;
 
 export function CreateSakuraModel(arg1:string):Promise<string>;
+
+export function RecordNewsInterest(arg1:string,arg2:boolean,arg3:string[]):Promise<void>;
+
+export function ExpandForReview():Promise<void>;
+
+export function CollapseFromReview():Promise<void>;
+
+export function GetUnratedSpeeches():Promise<Array<{speech:string,personality:string,category:string,lang:string,source:string}>>;
+
+export function RateSpeech(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number,arg6:string):Promise<void>;

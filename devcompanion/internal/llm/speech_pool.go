@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	poolRefillThreshold = 2
-	poolBatchSize       = 5
+	poolRefillThreshold = 10
+	poolBatchSize       = 15
 	poolRefillCooldown  = 5 * time.Minute // 全破棄時のリトライ待機時間
 	maxDiscardedPerKey  = 20              // キーごとの動的Avoidリスト上限
 )
@@ -40,7 +40,7 @@ func currentTimeSlot() string {
 }
 
 func poolKey(personality, category, language string) string {
-	return fmt.Sprintf("%s:%s:%s:%s", personality, category, language, currentTimeSlot())
+	return fmt.Sprintf("%s:%s:%s", personality, category, language)
 }
 
 // Pop はプールからセリフを1つ取り出す。
@@ -132,4 +132,14 @@ func (sp *SpeechPool) GetDiscarded(key string) []string {
 	result := make([]string, len(d))
 	copy(result, d)
 	return result
+}
+
+// ClearAll はプール・クールダウン・discardedを全消去する。
+// banned words やexamplesを更新した後に呼ぶと即座に新しいバッチが生成される。
+func (sp *SpeechPool) ClearAll() {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	sp.pool = make(map[string][]string)
+	sp.cooldown = make(map[string]time.Time)
+	sp.discarded = make(map[string][]string)
 }

@@ -42,6 +42,7 @@ type Engine struct {
 	learning  *LearningEngine
 	situation *SituationEngine
 	proactive *ProactiveEngine
+	reasoner  *EventReasoner
 
 	lastEvent monitor.MonitorEvent
 	history   []string
@@ -85,6 +86,7 @@ func New(m *monitor.Monitor, ctxEng *contextengine.Estimator, p *persona.Persona
 	e.situation = NewSituationEngine()
 	e.learning = NewLearningEngine(prof, e, c)
 	e.proactive = NewProactiveEngine(prof, e, c)
+	e.reasoner = NewEventReasoner()
 	return e
 }
 
@@ -128,28 +130,20 @@ func (e *Engine) Run(ctx context.Context) {
 			return
 
 		case ev := <-events:
-			reason := e.reasonFromEvent(ev)
+			reason := e.reasoner.ReasonFromMonitorEvent(ev)
 			eventObj := types.Event{
 				Type: "monitor_event",
 				Payload: map[string]interface{}{
-					"state":             string(ev.State),
-					"task":              string(ev.Task),
-					"high_level_event":  string(ev.Event),
+					"state":            string(ev.State),
+					"task":             string(ev.Task),
+					"high_level_event": string(ev.Event),
 				},
 			}
 
 			// Monitor固有のプロファイル更新
 			e.profile.RecordActivity(time.Now())
-			if ev.State == types.StateSuccess {
-				e.profile.RecordBuildSuccess()
-				e.profile.RecordMoment(types.ProjectMoment{
-					Type:      "success",
-					Message:   "ビルド成功！",
-					Timestamp: types.TimeToStr(time.Now()),
-				})
-			} else if ev.State == types.StateFail {
-				e.profile.RecordBuildFail()
-			}
+			e.updateProfileFromMonitor(ev)
+
 			if e.observer != nil {
 				e.observer.OnMonitorEvent(ev, time.Now())
 			}
@@ -158,7 +152,7 @@ func (e *Engine) Run(ctx context.Context) {
 			e.handleAndNotify("monitor_event", eventObj, ev, reason, e.context.LastDecision.Confidence)
 
 		case obs := <-observations:
-			reason := e.reasonFromObservation(obs)
+			reason := e.reasoner.ReasonFromObservation(obs)
 			eventObj := types.Event{
 				Type: "observation_event",
 				Payload: map[string]interface{}{
@@ -167,17 +161,34 @@ func (e *Engine) Run(ctx context.Context) {
 			}
 
 			// Observation固有のプロファイル更新
-			if obs.Type == observer.ObsGitCommit {
-				e.profile.RecordCommit()
-				e.profile.RecordMoment(types.ProjectMoment{
-					Type:      "milestone",
-					Message:   "コミット完了",
-					Timestamp: types.TimeToStr(time.Now()),
-				})
-			}
+			e.updateProfileFromObservation(obs)
 
 			e.handleAndNotify("observation_event", eventObj, e.lastEvent, reason, e.context.LastDecision.Confidence)
 		}
+	}
+}
+
+func (e *Engine) updateProfileFromMonitor(ev monitor.MonitorEvent) {
+	if ev.State == types.StateSuccess {
+		e.profile.RecordBuildSuccess()
+		e.profile.RecordMoment(types.ProjectMoment{
+			Type:      "success",
+			Message:   "ビルド成功！",
+			Timestamp: types.TimeToStr(time.Now()),
+		})
+	} else if ev.State == types.StateFail {
+		e.profile.RecordBuildFail()
+	}
+}
+
+func (e *Engine) updateProfileFromObservation(obs observer.DevObservation) {
+	if obs.Type == observer.ObsGitCommit {
+		e.profile.RecordCommit()
+		e.profile.RecordMoment(types.ProjectMoment{
+			Type:      "milestone",
+			Message:   "コミット完了",
+			Timestamp: types.TimeToStr(time.Now()),
+		})
 	}
 }
 
@@ -186,8 +197,6 @@ func (e *Engine) Run(ctx context.Context) {
 func (e *Engine) handleAndNotify(eventType string, eventObj types.Event, ev monitor.MonitorEvent, reason llm.Reason, confidence float64) {
 	world, emotion := e.situation.ProcessEvent(eventObj)
 	e.learning.ProcessEvent(eventObj)
-
-	// world.IsAISession を ev に反映して speech generator に伝える
 	ev.IsAISession = world.IsAISession
 
 	prof := e.profile.Get()
@@ -198,7 +207,11 @@ func (e *Engine) handleAndNotify(eventType string, eventObj types.Event, ev moni
 
 	e.addHistory(text)
 	e.logger.LogSpeech(string(reason), text, prompt, backend, confidence, emotion, world.IsDeepWork, ev, e.history)
+	e.emit(eventType, ev, text, emotion, world.IsDeepWork)
+}
 
+// emit はセリフイベントをフロントエンドに送信する共通ヘルパー。
+func (e *Engine) emit(eventType string, ev monitor.MonitorEvent, speech string, emotion types.EmotionState, isDeepWork bool) {
 	e.notifier.Notify(types.Event{
 		Type: eventType,
 		Payload: map[string]interface{}{
@@ -206,11 +219,13 @@ func (e *Engine) handleAndNotify(eventType string, eventObj types.Event, ev moni
 			"task":           string(ev.Task),
 			"mood":           string(ev.Mood),
 			"emotion":        string(emotion),
-			"is_deep_work":   world.IsDeepWork,
-			"speech":         text,
+			"is_deep_work":   isDeepWork,
+			"speech":         speech,
 			"timestamp":      time.Now(),
 			"using_fallback": e.speech.IsUsingFallback(),
 			"profile":        map[string]string{"name": e.cfg.Name, "tone": e.cfg.Tone},
+			"news_context":   ev.NewsContext,
+			"news_tags":      ev.NewsTags,
 		},
 	})
 }
@@ -224,18 +239,18 @@ func (e *Engine) addHistory(msg string) {
 
 // StartupGreeting は起動時の挨拶を行う。
 func (e *Engine) StartupGreeting(ctx context.Context) {
-	// フロントエンドの Wails ウィンドウ初期化を待つ（5秒では足りないケースがある）
-	time.Sleep(10 * time.Second)
+	// フロントエンドの Wails ウィンドウ初期化を待つ（以前は10秒だったが、高速化のため5秒に短縮）
+	time.Sleep(5 * time.Second)
 	log.Println("[ENGINE] StartupGreeting: woke up, checking Ollama...")
 	// Ollamaの準備を待つ（ベストエフォート）
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
 		resp, err := http.Get("http://localhost:11434/api/tags")
 		if err == nil {
 			resp.Body.Close()
 			break
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 		if ctx.Err() != nil {
 			log.Println("[ENGINE] StartupGreeting: context cancelled, aborting")
 			return
@@ -262,6 +277,13 @@ func (e *Engine) OnUserQuestion(question string) {
 	if question == "" {
 		return
 	}
+	// ユーザーの発言をパーソナルメモリに保存（今後のセリフ生成で参照される）
+	e.profile.RecordPersonalMemory(types.PersonalMemory{
+		Content:   question,
+		Tags:      []string{"user_message"},
+		CreatedAt: types.TimeToStr(time.Now()),
+		Source:    "user_chat",
+	})
 	e.DispatchSpeech("question_reply_event", e.lastEvent, llm.ReasonUserQuestion, question)
 }
 
@@ -297,6 +319,8 @@ func (e *Engine) TriggerQuestion(traitID string) {
 
 // --- SpeechDispatcher 実装 ---
 
+var _ SpeechDispatcher = (*Engine)(nil)
+
 // DispatchSpeech はセリフを生成し、指定タイプのイベントとして通知する（SpeechDispatcher実装）。
 // 事前条件: reason は空文字列であってはならない。
 func (e *Engine) DispatchSpeech(eventType string, ev monitor.MonitorEvent, reason llm.Reason, question string) {
@@ -315,21 +339,7 @@ func (e *Engine) DispatchSpeech(eventType string, ev monitor.MonitorEvent, reaso
 	world, emotion := e.situation.GetState()
 	e.addHistory(text)
 	e.logger.LogSpeech(string(reason), text, prompt, backend, 1.0, emotion, world.IsDeepWork, ev, e.history)
-
-	e.notifier.Notify(types.Event{
-		Type: eventType,
-		Payload: map[string]interface{}{
-			"state":          string(ev.State),
-			"task":           string(ev.Task),
-			"mood":           string(ev.Mood),
-			"emotion":        string(emotion),
-			"is_deep_work":   world.IsDeepWork,
-			"speech":         text,
-			"timestamp":      time.Now(),
-			"using_fallback": e.speech.IsUsingFallback(),
-			"profile":        map[string]string{"name": e.cfg.Name, "tone": e.cfg.Tone},
-		},
-	})
+	e.emit(eventType, ev, text, emotion, world.IsDeepWork)
 }
 
 // DispatchEvent はセリフ生成なしにイベントを直接通知する（SpeechDispatcher実装）。
@@ -354,66 +364,4 @@ func (e *Engine) LastEvent() monitor.MonitorEvent {
 // WorldState は現在の世界モデルと感情状態を返す（SpeechDispatcher実装）。
 func (e *Engine) WorldState() (types.WorldModel, types.EmotionState) {
 	return e.situation.GetState()
-}
-
-// --- Engine が SpeechDispatcher を実装していることをコンパイル時に検証 ---
-var _ SpeechDispatcher = (*Engine)(nil)
-
-// --- イベント → Reason マッピング ---
-
-func (e *Engine) reasonFromEvent(ev monitor.MonitorEvent) llm.Reason {
-	if ev.Behavior.Type == types.BehaviorResearching {
-		return llm.ReasonActiveEdit
-	}
-
-	switch ev.Event {
-	case types.EventAISessionStarted:
-		return llm.ReasonAISessionStarted
-	case types.EventAISessionActive:
-		return llm.ReasonAISessionActive
-	case types.EventDevSessionStarted:
-		return llm.ReasonDevSessionStarted
-	case types.EventDevEditing:
-		return llm.ReasonActiveEdit
-	case types.EventGitActivity:
-		return llm.ReasonGitCommit
-	case types.EventProductiveToolActivity:
-		return llm.ReasonProductiveToolActivity
-	case types.EventDocWriting:
-		return llm.ReasonDocWriting
-	case types.EventLongInactivity:
-		return llm.ReasonLongInactivity
-	case types.EventWebBrowsing:
-		return llm.ReasonWebBrowsing
-	}
-
-	switch ev.State {
-	case types.StateSuccess:
-		return llm.ReasonSuccess
-	case types.StateFail:
-		return llm.ReasonFail
-	case types.StateCoding:
-		return llm.ReasonActiveEdit
-	case types.StateIdle:
-		return llm.ReasonIdle
-	}
-	return llm.ReasonThinkingTick
-}
-
-func (e *Engine) reasonFromObservation(obs observer.DevObservation) llm.Reason {
-	switch obs.Type {
-	case observer.ObsGitCommit:
-		return llm.ReasonGitCommit
-	case observer.ObsGitPush:
-		return llm.ReasonGitPush
-	case observer.ObsGitAdd:
-		return llm.ReasonGitAdd
-	case observer.ObsIdleStart:
-		return llm.ReasonIdle
-	case observer.ObsNightWork:
-		return llm.ReasonNightWork
-	case observer.ObsActiveEditing:
-		return llm.ReasonActiveEdit
-	}
-	return llm.ReasonThinkingTick
 }

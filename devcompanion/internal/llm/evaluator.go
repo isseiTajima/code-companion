@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const evalKeepCount = 2 // 評価後にプールへ保持する上位件数
+const evalKeepCount = 3 // 評価後にプールへ保持する上位件数
 
 // evaluateCandidates はOllamaで候補セリフを評価し、上位evalKeepCount件の0-indexedインデックスを返す。
 // 失敗した場合はnil（全件使用のフォールバック）を返す。
@@ -46,9 +46,9 @@ func buildEvalPrompt(candidates []string, recent []string, language string) stri
 	var sb strings.Builder
 
 	if language == "en" {
-		fmt.Fprintf(&sb, "Pick the best %d from the candidates below. Output ONLY numbers separated by space (e.g. \"1 3\"). No explanation.\n", evalKeepCount)
+		fmt.Fprintf(&sb, "Select the best %d lines for an AI companion character.\nPrefer lines that: (A) combine an observation with a genuine personal reaction (e.g. \"You've been at this for a while — honestly impressive\"), OR (B) are short but grounded in observation (e.g. \"Looking good\", \"Steady pace\").\nAvoid: generic filler with no observation behind it (e.g. \"I'm rooting for you\", \"Hope it works out\", \"Keep it up\").\nAlso avoid lines similar to recent ones, and prefer variety in tone.\nOutput ONLY numbers separated by space (e.g. \"1 3\"). No explanation.\n", evalKeepCount)
 		if len(recent) > 0 {
-			sb.WriteString("\nAvoid similarity to these recent lines:\n")
+			sb.WriteString("\nRecent lines (avoid similarity):\n")
 			for _, r := range recent {
 				sb.WriteString("- " + r + "\n")
 			}
@@ -59,9 +59,9 @@ func buildEvalPrompt(candidates []string, recent []string, language string) stri
 		}
 		fmt.Fprintf(&sb, "\nBest %d numbers:", evalKeepCount)
 	} else {
-		fmt.Fprintf(&sb, "以下の候補から最も自然なものを%d個選び、番号を空白区切りで答えてください（例: \"1 3\"）。説明不要。\n", evalKeepCount)
+		fmt.Fprintf(&sb, "AIコンパニオンのセリフ候補から良い%d件を選んでください。\n優先①: 観察＋感情の2段構成（例:「さっきからずっと触ってますよね、すごいなって思ってました」「こんな時間までやってるの、普通にすごいです」）\n優先②: 短くても観察ベースの自然な励まし（例:「いいペースですね」「ちゃんと進んでますね」）\n避ける: 観察なし・誰にでも言える定型文（例:「応援しています」「うまくいくといいですね」「頑張ってください」）\nまた直近のセリフと被るものは避け、トーンにバリエーションをつけること。\n番号を空白区切りで答えるだけ（例: \"1 3\"）。説明不要。\n", evalKeepCount)
 		if len(recent) > 0 {
-			sb.WriteString("\n直近の発言（似ているものは避けること）:\n")
+			sb.WriteString("\n直近のセリフ（似た表現は避けること）:\n")
 			for _, r := range recent {
 				sb.WriteString("- " + r + "\n")
 			}

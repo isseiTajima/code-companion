@@ -90,7 +90,7 @@ func main() {
 				HideTitleBar:               true,
 			},
 			WebviewIsTransparent: true,
-			WindowIsTranslucent:  false, // ここを false に戻してみる
+			WindowIsTranslucent:  false,
 		},
 	}); err != nil {
 		log.Fatalf("wails run: %v", err)

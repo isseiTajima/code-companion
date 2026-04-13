@@ -9,18 +9,36 @@
     options: string[];
   }
 
-  let { 
-    message = { id: 0, text: '' }, 
-    scale = 1, 
+  const I18N = {
+    ja: {
+      install: '今すぐインストール',
+      freeInputPlaceholder: '自由に入力...',
+      freeInputBtn: '✏️ 自由入力',
+      skip: '対象なし',
+    },
+    en: {
+      install: 'Install Now',
+      freeInputPlaceholder: 'Type your answer...',
+      freeInputBtn: '✏️ Custom',
+      skip: 'N/A',
+    },
+  }
+
+  let {
+    message = { id: 0, text: '' },
+    scale = 1,
     usingFallback = false,
     visible = $bindable(false),
     position = 'top-right',
+    language = 'ja',
     question = null as QuestionData | null,
     onanswer = (traitID: string, index: number, text: string) => {}
   } = $props()
 
+  const t = $derived(language === 'en' ? I18N.en : I18N.ja)
+
   let timer: ReturnType<typeof setTimeout> | null = null
-  const maxLength = 40
+  const maxLength = 180
 
   let showInstallButton = $state(false)
   let displayText = $state('')
@@ -62,9 +80,9 @@
 
     visible = true
     if (!showInstallButton) {
-      // 文字数に応じて表示時間を調整（最低8秒、20文字以上は+200ms/文字、最大12秒）
+      // 文字数に応じて表示時間を調整（最低8秒、+200ms/文字、最大25秒）
       const len = Array.from(text).length
-      const ms = Math.min(12000, Math.max(8000, len * 200))
+      const ms = Math.min(25000, Math.max(8000, len * 200))
       timer = setTimeout(() => { visible = false }, ms)
     }
   })
@@ -129,13 +147,9 @@
       
       <p class="balloon-text">{trimmed}</p>
 
-      {#if usingFallback}
-        <span class="fallback-label">🔄</span>
-      {/if}
-
       {#if showInstallButton}
         <button class="install-btn" onclick={handleInstall}>
-          今すぐインストール
+          {t.install}
         </button>
       {/if}
 
@@ -152,7 +166,7 @@
               <input
                 class="free-input"
                 type="text"
-                placeholder="自由に入力..."
+                placeholder={t.freeInputPlaceholder}
                 bind:value={freeInputText}
                 autofocus
                 onkeydown={(e) => e.key === 'Enter' && handleFreeSubmit()}
@@ -160,9 +174,9 @@
               <button class="free-submit-btn" onclick={handleFreeSubmit} disabled={!freeInputText.trim()}>→</button>
             </div>
           {:else}
-            <button class="free-btn" onclick={() => showFreeInput = true}>✏️ 自由入力</button>
+            <button class="free-btn" onclick={() => showFreeInput = true}>{t.freeInputBtn}</button>
           {/if}
-          <button class="skip-btn" onclick={handleSkip}>対象なし</button>
+          <button class="skip-btn" onclick={handleSkip}>{t.skip}</button>
         </div>
       {/if}
     </div>
@@ -172,13 +186,11 @@
 <style>
   .balloon {
     position: relative;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: #ffffff;
     border: 1.2px solid rgba(0, 0, 0, 0.1);
     /* border-radius / padding / font-size はインラインスタイルでスケール制御 */
     width: auto;
-    max-width: 250px;
+    max-width: 360px;
     min-height: 40px;
     height: auto;
     word-break: normal;
@@ -345,12 +357,5 @@
     font-weight: 500;
   }
 
-  .balloon.fallback {
-    background: rgba(255, 248, 225, 0.95);
-    border: 1.2px solid rgba(255, 193, 7, 0.3);
-  }
 
-  .fallback-label {
-    font-size: 12px;
-  }
 </style>

@@ -17,6 +17,14 @@ type Relationship struct {
 	EncouragementPreference string `json:"encouragement_preference"` // "gentle"|"strict"
 }
 
+// NewsInterests はユーザーのニュース関心を記録する。
+type NewsInterests struct {
+	CategoryScores    map[string]float64 `json:"category_scores"`    // "tech":0.8, "game":0.3
+	LikedHeadlines    []string           `json:"liked_headlines"`    // 最大20件
+	DislikedHeadlines []string           `json:"disliked_headlines"` // 最大10件
+	ShownHeadlines    map[string]int     `json:"shown_headlines"`    // 見出し → 表示回数（最大200エントリ）
+}
+
 // DevProfile はセリフ生成に渡す開発者プロファイル。
 type DevProfile struct {
 	NightCoder        bool                                 `json:"night_coder"`
@@ -28,6 +36,7 @@ type DevProfile struct {
 	Evolution         map[types.TraitID]types.TraitProgress `json:"evolution"`
 	Memories          []types.ProjectMoment                `json:"memories"`
 	PersonalMemories  []types.PersonalMemory               `json:"personal_memories"`
+	NewsInterests     NewsInterests                        `json:"news_interests"`
 }
 
 // fileData はファイルに永続化する統計データと DevProfile を合わせた構造体。
@@ -123,6 +132,17 @@ func (ps *ProfileStore) RecordActivity(now time.Time) {
 }
 
 // RecordTraitUpdate はユーザーの回答に基づいて特性を更新する。
+// RecordTraitAsked は質問を発火した時点で LastAsked を記録する。
+// ユーザーがスキップしても12時間クールダウンが適用される。
+func (ps *ProfileStore) RecordTraitAsked(trait types.TraitID) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	prog := ps.data.Evolution[trait]
+	prog.LastAsked = types.TimeToStr(time.Now())
+	ps.data.Evolution[trait] = prog
+	_ = ps.save()
+}
+
 func (ps *ProfileStore) RecordTraitUpdate(trait types.TraitID, value float64, answer string) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
@@ -229,7 +249,85 @@ func computeProfile(d fileData) DevProfile {
 		Evolution:        d.Evolution,
 		Memories:         d.Memories,
 		PersonalMemories: d.PersonalMemories,
+		NewsInterests:    d.NewsInterests,
 	}
+}
+
+// RecordNewsInterest はニュースへの関心フィードバックを記録する。
+// tags: フィードカテゴリ ("tech", "game", "anime" など)
+// headlines: 表示された見出し文字列（複数行も可）
+func (ps *ProfileStore) RecordNewsInterest(headlines string, tags []string, interested bool) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	ni := &ps.data.NewsInterests
+	if ni.CategoryScores == nil {
+		ni.CategoryScores = make(map[string]float64)
+	}
+
+	// カテゴリスコア更新（±0.15、[-1, 1] クランプ）
+	delta := 0.15
+	if !interested {
+		delta = -0.15
+	}
+	for _, tag := range tags {
+		score := ni.CategoryScores[tag] + delta
+		if score > 1.0 {
+			score = 1.0
+		} else if score < -1.0 {
+			score = -1.0
+		}
+		ni.CategoryScores[tag] = score
+	}
+
+	// 見出し履歴を追加
+	if interested {
+		ni.LikedHeadlines = appendCapped(ni.LikedHeadlines, headlines, 20)
+	} else {
+		ni.DislikedHeadlines = appendCapped(ni.DislikedHeadlines, headlines, 10)
+	}
+
+	ps.data.DevProfile = computeProfile(ps.data)
+	_ = ps.save()
+}
+
+// RecordNewsShown はニュース見出しの表示回数をインクリメントする。
+// エントリが 200 件を超えたら表示済み（count >= 2）のものから削除して圧縮する。
+func (ps *ProfileStore) RecordNewsShown(headline string) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	ni := &ps.data.NewsInterests
+	if ni.ShownHeadlines == nil {
+		ni.ShownHeadlines = make(map[string]int)
+	}
+	ni.ShownHeadlines[headline]++
+
+	// 肥大化防止: 200件超えたら表示済み(>=2)エントリを削除
+	if len(ni.ShownHeadlines) > 200 {
+		for k, v := range ni.ShownHeadlines {
+			if v >= 2 {
+				delete(ni.ShownHeadlines, k)
+			}
+		}
+	}
+
+	ps.data.DevProfile = computeProfile(ps.data)
+	_ = ps.save()
+}
+
+func appendCapped(list []string, item string, max int) []string {
+	// 重複チェック
+	for _, s := range list {
+		if s == item {
+			return list
+		}
+	}
+	list = append(list, item)
+	if len(list) > max {
+		list = list[len(list)-max:]
+	}
+	return list
 }
 
 func computeRelationship(d fileData) Relationship {

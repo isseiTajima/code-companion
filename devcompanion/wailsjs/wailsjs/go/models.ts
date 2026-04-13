@@ -24,6 +24,9 @@ export namespace config {
 	    language: string;
 	    persona_style: string;
 	    relationship_mode: string;
+	    weather_location: string;
+	    dialect: string;
+	    news_feeds: Record<string, Array<string>>;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -54,6 +57,34 @@ export namespace config {
 	        this.language = source["language"];
 	        this.persona_style = source["persona_style"];
 	        this.relationship_mode = source["relationship_mode"];
+	        this.weather_location = source["weather_location"];
+	        this.dialect = source["dialect"];
+	        this.news_feeds = source["news_feeds"];
+	    }
+	}
+
+}
+
+export namespace llm {
+	
+	export class SpeechReviewItem {
+	    speech: string;
+	    personality: string;
+	    category: string;
+	    lang: string;
+	    source: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SpeechReviewItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.speech = source["speech"];
+	        this.personality = source["personality"];
+	        this.category = source["category"];
+	        this.lang = source["lang"];
+	        this.source = source["source"];
 	    }
 	}
 
@@ -104,6 +135,10 @@ export namespace monitor {
 	    context: types.ContextInfo;
 	    decision: types.ContextDecision;
 	    details: string;
+	    is_ai_session: boolean;
+	    news_context: string;
+	    news_tags: string[];
+	    weather_context: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new MonitorEvent(source);
@@ -120,6 +155,10 @@ export namespace monitor {
 	        this.context = this.convertValues(source["context"], types.ContextInfo);
 	        this.decision = this.convertValues(source["decision"], types.ContextDecision);
 	        this.details = source["details"];
+	        this.is_ai_session = source["is_ai_session"];
+	        this.news_context = source["news_context"];
+	        this.news_tags = source["news_tags"];
+	        this.weather_context = source["weather_context"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

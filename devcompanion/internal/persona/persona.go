@@ -33,7 +33,7 @@ func (p *PersonaEngine) GetPromptModifiers() string {
 		return "優しく見守る、控えめで可愛いトーンで話してください。"
 	case types.StyleEnergetic, types.StyleGenki:
 		return "元気いっぱいに、ポジティブで明るいトーンで話してください。"
-	case types.StyleStrict, types.StyleTsukime:
+	case types.StyleStrict, types.StyleCool:
 		return "少し生意気で直接的な、きつめのトーンで話してください。"
 	default:
 		return "丁寧かつ明るい態度で接してください。"

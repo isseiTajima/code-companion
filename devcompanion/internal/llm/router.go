@@ -4,14 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
 const (
-	ollamaRouterTimeout = 30 * time.Second
-	claudeRouterTimeout = 10 * time.Second
-	geminiRouterTimeout = 20 * time.Second
-	aicliRouterTimeout  = 10 * time.Second
+	ollamaRouterTimeout = 90 * time.Second
+	claudeRouterTimeout = 20 * time.Second
+	geminiRouterTimeout = 60 * time.Second
+	aicliRouterTimeout  = 30 * time.Second
 )
 
 type LLMClient interface {
@@ -34,6 +36,9 @@ type BatchRequest struct {
 	Count                 int
 	RecentLines           []string // avoid list: 直近の発言履歴
 	DiscardedPatterns     []string // 動的Avoidリスト: 過去に破棄されたセリフ
+	Dialect               string   // 方言指定: "" | "hakata" | "kyoto" | "kansai"
+	Season                string   // 現在の季節: "春" | "夏" | "秋" | "冬" (ja) / "spring" | "summer" | "autumn" | "winter" (en)
+	SituationHint         string   // さくらの観察メモ: 技術不要の時間・コミット等を事前変換した自然語
 }
 
 // BatchClient は複数セリフをまとめて生成できるバックエンドのインターフェース。
@@ -54,6 +59,31 @@ type LLMRouter struct {
 	claude LLMClient
 	gemini LLMClient
 	aiCLI  LLMClient
+
+	// 接続障害検知
+	failStreak atomic.Int32
+	warnMu     sync.Mutex
+	lastWarnAt time.Time
+}
+
+const (
+	llmFailWarnThreshold = 3             // この連続失敗回数で警告
+	llmWarnCooldown      = 30 * time.Minute
+)
+
+// consumeConnWarn は連続失敗が閾値を超えており、かつクールダウン経過後であれば true を返して
+// lastWarnAt を更新する（呼び出し側が警告セリフを表示するタイミング判断に使う）。
+func (r *LLMRouter) consumeConnWarn() bool {
+	if r.failStreak.Load() < llmFailWarnThreshold {
+		return false
+	}
+	r.warnMu.Lock()
+	defer r.warnMu.Unlock()
+	if time.Since(r.lastWarnAt) < llmWarnCooldown {
+		return false
+	}
+	r.lastWarnAt = time.Now()
+	return true
 }
 
 // orderedLayers は優先度順のバックエンド一覧を返す。
@@ -75,10 +105,12 @@ func (r *LLMRouter) Route(ctx context.Context, input OllamaInput) (string, strin
 	}
 	for _, layer := range r.orderedLayers() {
 		if result, prompt, ok := r.try(ctx, layer.client, layer.timeout, input, layer.name); ok {
+			r.failStreak.Store(0)
 			return result, layer.name, prompt, nil
 		}
 	}
-	// Fallback（プロンプトなし）
+	// 全バックエンド失敗 → streak をインクリメント
+	r.failStreak.Add(1)
 	return FallbackSpeech(Reason(input.Reason), input.Language), "Fallback", "", nil
 }
 
@@ -92,7 +124,7 @@ func (r *LLMRouter) BatchGenerate(ctx context.Context, req BatchRequest) ([]stri
 		if !ok {
 			continue
 		}
-		timeoutCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		timeoutCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 		speeches, err := bc.BatchGenerate(timeoutCtx, req)
 		cancel()
 		if err == nil && len(speeches) > 0 {

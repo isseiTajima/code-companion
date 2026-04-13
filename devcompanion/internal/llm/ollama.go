@@ -90,13 +90,27 @@ type OllamaInput struct {
 	CurrentStage     int    // 進化ステージ
 	LastAnswer       string   // 前回の回答
 	PastAnswers      []string // このトレイトへの過去回答履歴（LLMに重複質問を避けさせるため）
-	PersonalityType  string // "genki", "cute", "tsukime"
+	PersonalityType  string // "genki", "cute", "cool"
 	RelationshipMode string // "normal", "lover"
 	LearnedTraits        map[string]float64 // 学習されたユーザーの特性 (後方互換)
 	LearnedTraitLabels   map[string]string  // 学習済み特性のテキストラベル（回答内容）
 	PersonalMemorySummary string            // ユーザーの会話から得た個人情報のサマリー（複数行）
 	RandomSeed           int64              // 毎回異なる値を注入してプロンプトの一意性を保証
 	IsAISession          bool               // AIエージェントが動いている（バイブコーディング中）
+	NewsContext          string             // ニュース見出し（InitCuriosity用）
+	NewsPreferences      string             // 好き/嫌いな見出しのサマリー（継続的学習用）
+	WeatherContext       string             // 天気情報（InitWeather用）
+	ExampleSpeeches      []string           // few-shot例文（性格・状況別に選定済み）
+	VoiceAtoms           string             // キャラクター固有の声のパーツ（語り出し/気持ち/締め）
+	ConversationHistory  []ConvTurn         // 直近の会話履歴（UserQuestion用）
+	Dialect              string             // 方言指定: "" | "hakata" | "kyoto" | "kansai"
+	Season               string             // 現在の季節（"春"/"夏"/"秋"/"冬" or "spring" etc）
+}
+
+// ConvTurn は会話の1ターンを表す。
+type ConvTurn struct {
+	Role string // "user" または "sakura"
+	Text string
 }
 
 // OllamaClient はOllama APIのクライアント。
@@ -165,6 +179,7 @@ func (c *OllamaClient) Generate(ctx context.Context, in OllamaInput) (string, st
 		"model":    c.model,
 		"messages": messages,
 		"stream":   false,
+		"think":    false, // Qwen3.5+ の thinking モードを無効化（出力の肥大化・遅延防止）
 		"options": map[string]interface{}{
 			"temperature":    temperature,
 			"repeat_penalty": 1.3,
@@ -179,8 +194,10 @@ func (c *OllamaClient) Generate(ctx context.Context, in OllamaInput) (string, st
 	var lastErr error
 	for attempt := 0; attempt < retryAttempts; attempt++ {
 		if attempt > 0 {
-			time.Sleep(1 * time.Second)
+			// 指数バックオフ的に少し待機
+			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
 		}
+		
 		timeoutCtx, cancel := context.WithTimeout(ctx, c.timeout)
 		req, reqErr := http.NewRequestWithContext(timeoutCtx, http.MethodPost, chatEP, bytes.NewReader(reqBody))
 		if reqErr != nil {
@@ -194,6 +211,11 @@ func (c *OllamaClient) Generate(ctx context.Context, in OllamaInput) (string, st
 		if httpErr != nil {
 			cancel()
 			lastErr = fmt.Errorf("Ollama connection failed (Is Ollama running?): %w", httpErr)
+			
+			// タイムアウトエラー（DeadlineExceeded）の場合はリトライしても無駄なことが多いため中断
+			if ctx.Err() == context.DeadlineExceeded || strings.Contains(httpErr.Error(), "context deadline exceeded") {
+				break
+			}
 			continue
 		}
 
@@ -213,7 +235,10 @@ func (c *OllamaClient) Generate(ctx context.Context, in OllamaInput) (string, st
 		}
 		if resp.StatusCode != http.StatusOK {
 			lastErr = fmt.Errorf("ollama returned status %d", resp.StatusCode)
-			continue
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				break // 4xx クライアントエラー（404等）はリトライしない
+			}
+			continue // 5xx サーバーエラーはリトライの価値あり
 		}
 		return cleanSpeechOutput(result.Message.Content), prompt, nil
 	}
@@ -241,6 +266,7 @@ func (c *OllamaClient) GenerateRaw(ctx context.Context, prompt string) (string, 
 			{"role": "user", "content": prompt},
 		},
 		"stream": false,
+		"think":  false, // Qwen3.5+ の thinking モードを無効化
 		"options": map[string]interface{}{
 			"temperature": 0.1, // 低温度で安定したフォーマット出力
 		},
@@ -285,8 +311,14 @@ func (c *OllamaClient) BatchGenerate(ctx context.Context, req BatchRequest) ([]s
 			{"role": "user", "content": prompt},
 		},
 		"stream": false,
+		"think":  false, // Qwen3.5+ の thinking モードを無効化
+		// format: JSON配列スキーマを指定し、grammar-based 生成でフォーマット違反を物理的に排除
+		"format": map[string]interface{}{
+			"type":  "array",
+			"items": map[string]interface{}{"type": "string"},
+		},
 		"options": map[string]interface{}{
-			"temperature":    0.9,
+			"temperature":    0.7, // 0.9→0.7: 小モデルはこのほうがルール遵守率が高い
 			"repeat_penalty": 1.2,
 			"top_p":          0.9,
 		},
@@ -295,7 +327,7 @@ func (c *OllamaClient) BatchGenerate(ctx context.Context, req BatchRequest) ([]s
 		return nil, fmt.Errorf("marshal batch request: %w", err)
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 180*time.Second)
 	defer cancel()
 
 	httpReq, err := http.NewRequestWithContext(timeoutCtx, http.MethodPost, c.chatEndpoint(), bytes.NewReader(reqBody))
@@ -322,7 +354,22 @@ func (c *OllamaClient) BatchGenerate(ctx context.Context, req BatchRequest) ([]s
 		return nil, fmt.Errorf("batch generate returned status %d", resp.StatusCode)
 	}
 
-	return parseBatchResponse(result.Message.Content, req.Language), nil
+	// structured output (JSON配列) としてパース。失敗時はテキストパースにフォールバック。
+	raw := stripCodeFences(strings.TrimSpace(result.Message.Content))
+	var speeches []string
+	if err := json.Unmarshal([]byte(raw), &speeches); err != nil {
+		speeches = parseBatchResponse(raw, req.Language)
+	} else {
+		// JSON パース成功時も postProcess を適用
+		var processed []string
+		for _, s := range speeches {
+			if p := postProcess(s, req.Language); p != "" {
+				processed = append(processed, p)
+			}
+		}
+		speeches = processed
+	}
+	return speeches, nil
 }
 
 func buildBatchPrompt(req BatchRequest) string {
@@ -399,42 +446,103 @@ func buildBatchPrompt(req BatchRequest) string {
 		traitsSection += req.PersonalMemorySummary + "\n"
 	}
 
-	// 作業時間コンテキスト（ラベルのみ、具体的な分数は渡さない）
+	// 作業時間コンテキストは注入しない
+	// （PCつけっぱなし運用では session 時間が実際の作業時間と一致しないため）
 	workTimeSection := ""
-	if req.WorkingDuration != "" {
-		var label string
-		if lang == "en" {
-			switch req.WorkingDuration {
-			case "short":
-				label = "just getting warmed up (about 10-30 min)"
-			case "medium":
-				label = "in the flow for a while (about 30-120 min)"
-			case "long":
-				label = "been at it for a long time (2+ hours)"
-			}
-			workTimeSection = fmt.Sprintf("\n[Session feel: %s]\n", label)
-		} else {
-			switch req.WorkingDuration {
-			case "short":
-				label = "作業し始めたばかり（10〜30分程度）"
-			case "medium":
-				label = "しばらく集中が続いている（30分〜2時間程度）"
-			case "long":
-				label = "かなり長い時間ぶっ通しで作業中（2時間超）"
-			}
-			workTimeSection = fmt.Sprintf("\n【作業の感じ: %s】\n", label)
-		}
-	}
 
 	tmpl := i18n.T(lang, "batch.template")
 	// tmpl must handle: userName, count, count, userName, pd, md, cd, traitsSection, workTimeSection, avoidSection
-	return fmt.Sprintf(tmpl, userName, req.Count, req.Count, userName, pd, md, cd, traitsSection, workTimeSection, avoidSection)
+	prompt := fmt.Sprintf(tmpl, userName, req.Count, req.Count, userName, pd, md, cd, traitsSection, workTimeSection, avoidSection)
+
+	// 現在の季節をプロンプトに追加（PersonalMemoryの季節情報と混同させないため）
+	if req.Season != "" {
+		prompt += fmt.Sprintf("\n【現在の季節】今は%sです。季節に関する発言はこの季節に合わせること。", req.Season)
+	}
+
+	// SituationHint: 技術不要の観察情報（時間・コミット数）を自然語で注入
+	// この情報を使うとより具体的なセリフが生成できる（使用は任意）
+	if req.SituationHint != "" {
+		prompt += fmt.Sprintf("\n【今の状況メモ（技術がわからなくても隣で見ていれば分かること）】%s", req.SituationHint)
+	}
+
+	// private カテゴリのみ: サクラのキャラクタープロフィールを注入して一貫した人格を保つ
+	if req.Category == "private" {
+		if profile := i18n.T(lang, "batch.sakura_profile"); profile != "" && profile != "batch.sakura_profile" {
+			prompt += "\n" + profile
+		}
+	}
+
+	// 方言指定があればプロンプトに追加
+	if req.Dialect != "" && lang == "ja" {
+		switch req.Dialect {
+		case "hakata":
+			prompt += "\n【方言指定】全セリフを博多弁で書くこと。語尾は「〜やけん」「〜とー」「〜ばい」「〜たい」「〜しとーと？」を使う。標準語語尾（〜です・〜ます）は禁止。"
+		case "kyoto":
+			prompt += "\n【方言指定】全セリフを京都弁で書くこと。「〜やわ」「〜えー」「〜はる」「〜どすえ」を使い、はんなりとした柔らかい口調で。"
+		case "kansai":
+			prompt += "\n【方言指定】全セリフを関西弁で書くこと。「〜やん」「〜やで」「〜ねん」「〜ちゃう？」「〜やろ」「めっちゃ」を自然に使うこと。"
+		}
+	}
+
+	// few-shot 例文をプロンプト末尾に追加（Pool 補充にも品質ハーネスを効かせる）
+	if exSection := buildBatchExampleSection(lang, req.Personality, req.Category); exSection != "" {
+		prompt += exSection
+	}
+
+	// 末尾出力指示: 生成直前に最重要制約を再提示する（小モデルは最後に見た指示に最も引きずられる）
+	if lang == "ja" {
+		prompt += "\n\n出力（JSON文字列配列、1件20〜40字のセリフのみ）:"
+	} else {
+		prompt += "\n\nOutput (JSON string array, 20-40 char speech lines only):"
+	}
+	return prompt
 }
 
 // listPrefixRe は Unicode 数字（全角・ベンガル等を含む）から始まる番号付きリストの行頭を除去する。
 var listPrefixRe = regexp.MustCompile(`^\p{N}+[\s\.．）\)、:：]+\s*`)
 
+// stripCodeFences はモデルが出力する ```json ... ``` のコードフェンスを除去する。
+func stripCodeFences(s string) string {
+	fenceIdx := strings.Index(s, "```")
+	if fenceIdx < 0 {
+		return s
+	}
+	// ``` の直後から最初の改行までが開始フェンス行（"```json" 等）
+	afterFence := s[fenceIdx:]
+	newlineInFence := strings.Index(afterFence, "\n")
+	if newlineInFence < 0 {
+		return s
+	}
+	s = afterFence[newlineInFence+1:]
+	// 閉じフェンス ``` を末尾から除去
+	if end := strings.LastIndex(s, "```"); end >= 0 {
+		s = s[:end]
+	}
+	return strings.TrimSpace(s)
+}
+
 func parseBatchResponse(raw, lang string) []string {
+	// まずJSON配列としてパース試行（モデルがJSON形式で返す場合）
+	trimmedRaw := strings.TrimSpace(raw)
+	if strings.HasPrefix(trimmedRaw, "[") {
+		var jsonArr []string
+		if err := json.Unmarshal([]byte(trimmedRaw), &jsonArr); err == nil {
+			var result []string
+			for _, s := range jsonArr {
+				s = strings.TrimSpace(s)
+				if s == "" {
+					continue
+				}
+				if p := postProcess(s, lang); p != "" {
+					result = append(result, p)
+				}
+			}
+			if len(result) > 0 {
+				return result
+			}
+		}
+	}
+
 	lines := strings.Split(raw, "\n")
 	var result []string
 	for _, line := range lines {
@@ -451,13 +559,81 @@ func parseBatchResponse(raw, lang string) []string {
 				break
 			}
 		}
+		// JSON文字列リテラルのクリーニング: "text", → text
+		line = cleanJSONStringLiteral(line)
 		line = strings.TrimSpace(line)
-		processed := postProcess(line, lang)
-		if processed != "" {
-			result = append(result, processed)
+		if line == "" || isJSONArtifact(line) {
+			continue
+		}
+		// `, "` を含む行は複数セリフが連結されたもの → 分割して個別に処理
+		var segments []string
+		if strings.Contains(line, `", "`) || strings.Contains(line, `","`) {
+			for _, seg := range splitJSONArray(line) {
+				seg = strings.TrimSpace(seg)
+				if seg != "" && !isJSONArtifact(seg) {
+					segments = append(segments, seg)
+				}
+			}
+		} else {
+			segments = []string{line}
+		}
+		for _, seg := range segments {
+			if processed := postProcess(seg, lang); processed != "" {
+				result = append(result, processed)
+			}
 		}
 	}
 	return result
+}
+
+// splitJSONArray は `speech1", "speech2", "speech3` 形式の行を個々のセリフに分割する。
+func splitJSONArray(s string) []string {
+	// `", "` または `","` で分割し、各セグメントの前後の " を除去する
+	parts := strings.Split(s, `", "`)
+	if len(parts) == 1 {
+		parts = strings.Split(s, `","`)
+	}
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		p = strings.TrimPrefix(p, `"`)
+		p = strings.TrimSuffix(p, `"`)
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+// isJSONArtifact は parseBatchResponse 後のゴミ（括弧・数字・空記号のみ）を検出する。
+func isJSONArtifact(s string) bool {
+	for _, r := range []rune(s) {
+		if r != '[' && r != ']' && r != '{' && r != '}' && r != '"' && r != ',' && r != ' ' && r != '	' {
+			return false
+		}
+	}
+	return true
+}
+
+// cleanJSONStringLiteral は行頭・末尾のJSON文字列フォーマット（"text", / "text"] 等）を除去する。
+func cleanJSONStringLiteral(s string) string {
+	s = strings.TrimPrefix(s, "[") // 先頭の [ を除去
+	s = strings.TrimRight(s, ",]") // 末尾の , ] を除去
+	s = strings.TrimSpace(s)
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		s = s[1 : len(s)-1]
+	} else if len(s) >= 1 && s[0] == '"' {
+		// 先頭の " だけある場合: JSON配列要素が途中で切れているケース
+		// 例: "セリフ", "次の要素", null → 最初の閉じ " までを取る
+		s = s[1:]
+		if idx := strings.Index(s, `",`); idx >= 0 {
+			s = s[:idx]
+		} else if idx := strings.Index(s, `"`); idx >= 0 {
+			s = s[:idx]
+		}
+	}
+	return s
 }
 
 func renderPrompt(in OllamaInput) (string, error) {

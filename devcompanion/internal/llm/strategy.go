@@ -32,8 +32,8 @@ const (
 var reasonStrategies = map[Reason]GenerationStrategy{
 	// --- StrategyDirect: コンテキスト依存・一回限りイベント ---
 
-	// 時間帯依存。起動直後は Ollama が未起動でプリウォーム失敗するため
-	// プールに頼るとfallback固定になる。
+	// StartupGreeting は Ollama 疎通確認後に dispatch するため Direct が安全。
+	// StrategyPool だと prewarm が Ollama 起動前に失敗してプール空→Fallback になる。
 	ReasonGreeting:  StrategyDirect,
 	ReasonInitSetup: StrategyDirect,
 
@@ -56,7 +56,7 @@ var reasonStrategies = map[Reason]GenerationStrategy{
 	ReasonGitAdd:                StrategyPool,
 	ReasonIdle:                  StrategyPool,
 	ReasonNightWork:             StrategyPool,
-	ReasonUserClick:             StrategyPool,
+	ReasonUserClick:             StrategyPool, // プール生成済み reaction を使用（Direct はツンデレ口調で文脈不明な出力になりやすい）
 	ReasonAISessionStarted:      StrategyPool,
 	ReasonAISessionActive:       StrategyPool,
 	ReasonDevSessionStarted:     StrategyPool,
@@ -65,8 +65,9 @@ var reasonStrategies = map[Reason]GenerationStrategy{
 	ReasonLongInactivity:        StrategyPool,
 	ReasonInitObservation:       StrategyPool,
 	ReasonInitSupport:           StrategyPool,
-	ReasonInitCuriosity:         StrategyPool,
+	ReasonInitCuriosity:         StrategyDirect, // ニュースコンテキストが必要なためリアルタイム生成
 	ReasonInitMemory:            StrategyPool,
+	ReasonInitWeather:           StrategyDirect, // 天気コンテキストが必要なためリアルタイム生成
 }
 
 // strategyFor は Reason に対応する生成戦略を返す。

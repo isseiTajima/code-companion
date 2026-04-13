@@ -145,7 +145,7 @@ func TestSpeechGenerator_ClaudeSuccess_ResetsUsingFallback(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		resp := map[string]interface{}{
-			"content": []map[string]string{{"text": "復帰した"}},
+			"content": []map[string]string{{"text": "また作業してるんですね、よかったです！何かあれば声かけてください"}},
 		}
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
@@ -172,7 +172,7 @@ func TestSpeechGenerator_ClaudeSuccess_ResetsUsingFallback(t *testing.T) {
 	}
 
 	speech, _, _ := sg.Generate(event, cfg, ReasonUserQuestion, profile.DevProfile{}, "テスト質問")
-	if speech != "復帰した" {
-		t.Errorf("want '復帰した', got %q", speech)
+	if speech != "また作業してるんですね、よかったです！何かあれば声かけてください" {
+		t.Errorf("want expected speech, got %q", speech)
 	}
 }

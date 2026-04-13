@@ -3,9 +3,12 @@ package i18n
 import (
 	"embed"
 	"fmt"
-	"gopkg.in/yaml.v3"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed locales/*.yaml
@@ -14,9 +17,34 @@ var localeFS embed.FS
 type LocaleData map[string]interface{}
 
 var (
-	locales = make(map[string]LocaleData)
-	mu      sync.RWMutex
+	locales     = make(map[string]LocaleData)
+	overrideDir string // if set, try reading from here first (dev hot-reload)
+	mu          sync.RWMutex
 )
+
+// SetOverrideDir sets a directory to read locale files from in preference to the embedded FS.
+// Pass an empty string to disable. Automatically calls Reload for all known languages.
+func SetOverrideDir(dir string) {
+	mu.Lock()
+	overrideDir = dir
+	// Clear cache so files are re-read from the new location
+	locales = make(map[string]LocaleData)
+	mu.Unlock()
+}
+
+// Reload clears the cached locale data for the given languages (or all languages if none given).
+// The next call to T/TVariant will re-read from disk (or embedded FS).
+func Reload(langs ...string) {
+	mu.Lock()
+	if len(langs) == 0 {
+		locales = make(map[string]LocaleData)
+	} else {
+		for _, lang := range langs {
+			delete(locales, lang)
+		}
+	}
+	mu.Unlock()
+}
 
 // T returns the translated string for the given language and key.
 func T(lang, key string) string {
@@ -90,14 +118,27 @@ func loadLocale(lang string) error {
 		return nil
 	}
 
-	filename := fmt.Sprintf("locales/%s.yaml", lang)
-	data, err := localeFS.ReadFile(filename)
-	if err != nil {
-		return err
+	var raw []byte
+
+	// Try override directory first (dev hot-reload)
+	if overrideDir != "" {
+		diskPath := filepath.Join(overrideDir, lang+".yaml")
+		if b, err := os.ReadFile(diskPath); err == nil {
+			raw = b
+		}
+	}
+
+	// Fall back to embedded FS
+	if len(raw) == 0 {
+		b, err := localeFS.ReadFile(fmt.Sprintf("locales/%s.yaml", lang))
+		if err != nil {
+			return err
+		}
+		raw = b
 	}
 
 	var localeData LocaleData
-	if err := yaml.Unmarshal(data, &localeData); err != nil {
+	if err := yaml.Unmarshal(raw, &localeData); err != nil {
 		return err
 	}
 

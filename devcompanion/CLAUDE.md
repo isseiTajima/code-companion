@@ -1,4 +1,6 @@
-# CLAUDE.md — Sakura Kodama (devcompanion)
+# AGENTS.md — Sakura Kodama (devcompanion)
+
+> **作業開始前に必ず `docs/SPEC.md` を参照してください。** アーキテクチャ・LLM設計・パーソナリティ・バリデーション等の詳細仕様はすべてそちらに記載されています。
 
 ## プロジェクト概要
 macOS デスクトップの開発作業をリアルタイム監視し、AIキャラクター「サクラ」がセリフを発するWailsアプリ。

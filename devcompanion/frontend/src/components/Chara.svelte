@@ -2,23 +2,23 @@
   import c1Open from '../assets/pixel-chara1-open.png'
   import c1Half from '../assets/pixel-chara1-half.png'
   import c1Close from '../assets/pixel-chara1-close.png'
-  
+
   import c2Happy1 from '../assets/pixel-chara2.png'
   import c2Happy2 from '../assets/pixel-chara2-happy.png'
-  
+
   import c3Sad1 from '../assets/pixel-chara3.png'
   import c3Sad2 from '../assets/pixel-chara3-2.png'
 
   import c4PC1 from '../assets/pixel-chara4-pc1.png'
   import c4PC2 from '../assets/pixel-chara4-pc2.png'
 
-  let { 
-    status = 'Idle', 
-    mood = 'Neutral', 
+  import { onMount, onDestroy } from 'svelte'
+
+  let {
+    status = 'Idle',
+    mood = 'Neutral',
     scale = 1,
     isTalking = false,
-    flipped = false,
-    onClick = () => {} 
   } = $props()
 
   // 目パチの状態管理
@@ -69,13 +69,12 @@
     }
   })
 
-function blink() {
-  if (mood === 'Sadness' || mood === 'Negative' || mood === 'StrongJoy' || mood === 'Positive' || mood === 'Focus') {
-    // 特殊表情中や作業中はまばたきを止める
-    blinkTimer = setTimeout(blink, 1000)
-    return
-  }
-  eyeState = 1
+  function blink() {
+    if (mood === 'Sadness' || mood === 'Negative' || mood === 'StrongJoy' || mood === 'Positive' || mood === 'Focus') {
+      blinkTimer = setTimeout(blink, 1000)
+      return
+    }
+    eyeState = 1
     setTimeout(() => {
       eyeState = 2
       setTimeout(() => {
@@ -91,83 +90,53 @@ function blink() {
 
   onMount(() => {
     blinkTimer = setTimeout(blink, 3000)
-    return () => {
-      clearTimeout(blinkTimer)
-      if (joyFrameTimer) clearInterval(joyFrameTimer)
-      if (sadTimer) clearInterval(sadTimer)
-      if (pcTimer) clearInterval(pcTimer)
-    }
   })
 
-  import { onMount } from 'svelte'
+  onDestroy(() => {
+    clearTimeout(blinkTimer)
+    if (joyFrameTimer) clearInterval(joyFrameTimer)
+    if (sadTimer) clearInterval(sadTimer)
+    if (pcTimer) clearInterval(pcTimer)
+  })
 
   // 状態に応じた画像選択
   const currentImg = $derived.by(() => {
-    // PC作業（集中）
-    if (mood === 'Focus') {
-      return pcFrame === 0 ? c4PC1 : c4PC2
-    }
-
-    // 悲しみ状態
-    if (mood === 'Sadness' || mood === 'Negative') {
-      return sadFrame === 0 ? c3Sad1 : c3Sad2
-    }
-
-    // 喜び状態
-    if (mood === 'StrongJoy' || mood === 'Positive') {
-      return joyFrame === 0 ? c2Happy1 : c2Happy2
-    }
-    
-    // 通常状態（瞬き）
+    if (mood === 'Focus') return pcFrame === 0 ? c4PC1 : c4PC2
+    if (mood === 'Sadness' || mood === 'Negative') return sadFrame === 0 ? c3Sad1 : c3Sad2
+    if (mood === 'StrongJoy' || mood === 'Positive') return joyFrame === 0 ? c2Happy1 : c2Happy2
     if (eyeState === 0) return c1Open
     if (eyeState === 1) return c1Half
     return c1Close
   })
 </script>
 
-<button
-  class="chara-button"
-  class:talking={isTalking}
-  class:flipped={flipped}
-  onclick={onClick}
->
+<div class="chara-display" class:talking={isTalking}>
   <img
     src={currentImg}
     alt="Character"
     class="pixel-art"
     style="width: {Math.round(128 * scale)}px"
   />
-</button>
+</div>
 
 <style>
-  .chara-button {
+  .chara-display {
     display: inline-block;
     line-height: 0;
     width: auto;
     height: auto;
     animation: floating 3s ease-in-out infinite;
-    cursor: pointer;
-    transition: transform 0.2s, opacity 0.5s;
+    transition: opacity 0.3s;
     opacity: 0.8;
-    background: none;
-    border: none;
-    padding: 0;
-  }
-
-  .chara-button.flipped {
-    transform: scaleX(-1) !important;
-  }
-  .chara-button.flipped img {
-    transform: scaleX(1);
-  }
-
-  .chara-button.talking {
-    opacity: 1;
+    /* キャラクタ画像は常にクリック透過させる */
+    pointer-events: none !important;
   }
 
   img.pixel-art {
     height: auto;
     image-rendering: pixelated;
+    /* 画像そのものも確実に透過 */
+    pointer-events: none !important;
   }
 
   @keyframes floating {

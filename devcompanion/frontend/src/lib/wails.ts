@@ -13,6 +13,11 @@ import {
   ListOllamaModels as nativeListOllamaModels,
   DeleteModel as nativeDeleteModel,
   CreateSakuraModel as nativeCreateSakuraModel,
+  RecordNewsInterest as nativeRecordNewsInterest,
+  GetUnratedSpeeches as nativeGetUnratedSpeeches,
+  RateSpeech as nativeRateSpeech,
+  ExpandForReview as nativeExpandForReview,
+  CollapseFromReview as nativeCollapseFromReview,
 } from 'wailsjs/go/main/App'
 
 type RuntimeAwareWindow = Window & {
@@ -44,6 +49,7 @@ export type AppConfig = {
   speech_frequency: number
   window_position: string
   language: string
+  news_feeds: Record<string, string[]>
 }
 
 const DEFAULT_NAME = 'サクラ'
@@ -72,6 +78,7 @@ export const defaultConfig: AppConfig = {
   speech_frequency: 2,
   window_position: "top-right",
   language: "ja",
+  news_feeds: {},
 }
 
 const FALLBACK_STORAGE_KEY = 'wails:fallbackConfig'
@@ -267,10 +274,53 @@ export function onPullProgress(cb: (p: PullProgress) => void) {
   }
 }
 
+export async function recordNewsInterest(newsContext: string, interested: boolean, tags: string[]): Promise<void> {
+  if (!hasRuntime()) return
+  await nativeRecordNewsInterest(newsContext, interested, tags)
+}
+
+export async function SetInteractiveMode(required: boolean): Promise<void> {
+  if (!hasRuntime()) return
+  // バインディングがまだ生成されていない場合でもエラーにならないように動的にアクセス
+  const app = (window as any)?.go?.main?.App
+  if (app && typeof app.SetInteractiveMode === 'function') {
+    await app.SetInteractiveMode(required)
+  }
+}
+
 export function onOpenSettings(cb: () => void) {
   if (typeof window !== 'undefined' && (window as any).runtime) {
     const r = (window as any).runtime
     r.EventsOff('open-settings')
     r.EventsOn('open-settings', cb)
   }
+}
+
+export type SpeechReviewItem = {
+  speech: string
+  personality: string
+  category: string
+  lang: string
+  source: string
+}
+
+export async function expandForReview(): Promise<void> {
+  try { await nativeExpandForReview() } catch {}
+}
+
+export async function collapseFromReview(): Promise<void> {
+  try { await nativeCollapseFromReview() } catch {}
+}
+
+export async function getUnratedSpeeches(): Promise<SpeechReviewItem[]> {
+  try {
+    const result = await nativeGetUnratedSpeeches()
+    return result ?? []
+  } catch {
+    return []
+  }
+}
+
+export async function rateSpeech(item: SpeechReviewItem, rating: number, comment = ''): Promise<void> {
+  await nativeRateSpeech(item.speech, item.personality, item.category, item.lang, rating, comment)
 }

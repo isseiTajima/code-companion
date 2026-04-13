@@ -14,9 +14,9 @@ func TestTimeoutConsistency_OllamaTimeout(t *testing.T) {
 	// Given: Ollama クライアントが作成される
 	ollamaClient := NewOllamaClient("http://localhost:11434", "test-model")
 
-	// When/Then: タイムアウト値が 110s（内部の ollamaTimeout）であることを確認
+	// When/Then: タイムアウト値が 30s（内部の ollamaTimeout）であることを確認
 	if ollamaClient.timeout != 30*time.Second {
-		t.Errorf("want Ollama timeout 110s (internal), got %v", ollamaClient.timeout)
+		t.Errorf("want Ollama timeout 30s (internal), got %v", ollamaClient.timeout)
 	}
 }
 
@@ -57,20 +57,20 @@ func TestTimeoutConsistency_NestedTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// When: Router が ollamaRouterTimeout (110s) でタイムアウトコンテキストを作成
+	// When: Router が ollamaRouterTimeout (90s) でタイムアウトコンテキストを作成
 	timeoutCtx, cancel := context.WithTimeout(ctx, ollamaRouterTimeout)
 	defer cancel()
 
-	// Then: 実効タイムアウトが min(20s, 110s) = 110s になる
+	// Then: 実効タイムアウトが min(10s, 90s) = 10s になる（親 ctx が 10s で先に切れる）
 	deadline, ok := timeoutCtx.Deadline()
 	if !ok {
 		t.Fatal("want deadline to be set")
 	}
 
 	elapsed := time.Until(deadline)
-	// 15秒程度であることを確認
-	if elapsed > 110*time.Second {
-		t.Errorf("want timeout ~110s, got %v", elapsed)
+	// 10秒以内であることを確認（親 ctx の制約）
+	if elapsed > 90*time.Second {
+		t.Errorf("want timeout ~90s, got %v", elapsed)
 	}
 }
 

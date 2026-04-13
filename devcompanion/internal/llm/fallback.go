@@ -16,6 +16,9 @@ import (
 var (
 	rnd   = rand.New(rand.NewSource(time.Now().UnixNano()))
 	rndMu sync.Mutex
+
+	lastUsed   = make(map[string][]string) // Reason毎の履歴管理
+	lastUsedMu sync.Mutex
 )
 
 // SetSeed は乱数シードを固定する（テスト用）。
@@ -59,6 +62,7 @@ const (
 	ReasonInitSupport     Reason = "initiative_support"
 	ReasonInitCuriosity   Reason = "initiative_curiosity"
 	ReasonInitMemory      Reason = "initiative_memory"
+	ReasonInitWeather     Reason = "initiative_weather"
 
 	// Web browsing
 	ReasonWebBrowsing Reason = "web_browsing"
@@ -92,10 +96,73 @@ func FallbackSpeech(r Reason, lang string) string {
 		return "…"
 	}
 	
+	lastUsedMu.Lock()
+	history := lastUsed[key]
+	
+	// 直近の履歴を除外した候補を作成
+	candidates := []string{}
+	historyMap := make(map[string]bool)
+	for _, s := range history {
+		historyMap[s] = true
+	}
+	for _, t := range texts {
+		if !historyMap[t] {
+			candidates = append(candidates, t)
+		}
+	}
+
+	// 全て使用済みの場合は履歴をリセット
+	if len(candidates) == 0 {
+		candidates = texts
+		history = []string{}
+	}
+
 	rndMu.Lock()
-	idx := rnd.Intn(len(texts))
+	idx := rnd.Intn(len(candidates))
+	selected := candidates[idx]
 	rndMu.Unlock()
-	return texts[idx]
+
+	// 履歴を更新（最大5件または候補数の半分まで保持）
+	history = append(history, selected)
+	maxHist := len(texts) / 2
+	if maxHist < 1 { maxHist = 1 }
+	if maxHist > 5 { maxHist = 5 }
+	
+	if len(history) > maxHist {
+		history = history[1:]
+	}
+	lastUsed[key] = history
+	lastUsedMu.Unlock()
+
+	return selected
+}
+
+// connWarnSpeeches はLLM接続障害時の警告セリフ（性格を問わず共通）。
+var connWarnSpeeches = map[string][]string{
+	"ja": {
+		"あの…AIとの接続がうまくいってないみたいです。設定を確認してもらえますか？",
+		"なんか、AIとつながれてないかも…設定、見てもらえますか？",
+		"AIとの接続がうまくいってないっぽくて…確認してもらえると助かります。",
+	},
+	"en": {
+		"Hmm, the AI connection doesn't seem to be working… could you check the settings?",
+		"I think there might be a connection issue with the AI… worth checking the config.",
+	},
+}
+
+// connWarnSpeech はLLM接続障害検知時に表示する警告セリフを返す。
+func connWarnSpeech(lang string) string {
+	if lang == "" {
+		lang = "ja"
+	}
+	speeches, ok := connWarnSpeeches[lang]
+	if !ok {
+		speeches = connWarnSpeeches["ja"]
+	}
+	rndMu.Lock()
+	s := speeches[rnd.Intn(len(speeches))]
+	rndMu.Unlock()
+	return s
 }
 
 // isTooManyRequestsError は error が HTTP 429 (Too Many Requests) を示すかチェックする。

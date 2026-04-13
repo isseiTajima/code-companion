@@ -101,7 +101,6 @@ func (le *LearningEngine) ProcessEvent(ev types.Event) {
 			le.curiosity[types.TraitMotivationSource] += 0.1
 		}
 		if state == string(types.StateFail) {
-			le.curiosity[types.TraitDebuggingStyle] += 0.3
 			le.curiosity[types.TraitFeedbackPreference] += 0.2
 			le.curiosity[types.TraitStressRelief] += 0.15
 			le.curiosity[types.TraitEncouragementStyle] += 0.1
@@ -116,30 +115,47 @@ func (le *LearningEngine) ProcessEvent(ev types.Event) {
 			le.curiosity[types.TraitFocusStyle] += 0.15
 			le.curiosity[types.TraitBreakStyle] += 0.1
 			le.curiosity[types.TraitMultitaskStyle] += 0.1
-			le.curiosity[types.TraitFavoriteDrink] += 0.05
+			le.curiosity[types.TraitFavoriteDrink] += 0.1  // コーディング中の飲み物
+			le.curiosity[types.TraitMusicHabit] += 0.12    // 作業BGM
+			le.curiosity[types.TraitFavoriteSnack] += 0.08 // 間食
+			le.curiosity[types.TraitHobby] += 0.07         // 気分転換
 		}
 		if state == string(types.StateStuck) {
 			le.curiosity[types.TraitDebuggingStyle] += 0.35
 			le.curiosity[types.TraitStressRelief] += 0.25
 			le.curiosity[types.TraitEncouragementStyle] += 0.2
 			le.curiosity[types.TraitPraisePreference] += 0.1
+			le.curiosity[types.TraitHobby] += 0.1          // 詰まったときの気晴らし
 		}
 		if state == string(types.StateAIPairing) {
-			le.curiosity[types.TraitExperimentationStyle] += 0.3
-			le.curiosity[types.TraitRiskTolerance] += 0.2
-			le.curiosity[types.TraitTechInterest] += 0.15
+			// AI と組んでいる → 好奇心旺盛・チャレンジ精神を個人性格として聞く
+			le.curiosity[types.TraitRiskTolerance] += 0.2  // 新しいこと好き？慎重派？
+			le.curiosity[types.TraitCuriosityLevel] += 0.15
 		}
 		if state == string(types.StateIdle) {
-			le.curiosity[types.TraitLifeStyle] += 0.1
-			le.curiosity[types.TraitHobby] += 0.1
-			le.curiosity[types.TraitFoodPreference] += 0.1
-			le.curiosity[types.TraitFavoriteSnack] += 0.05
-			le.curiosity[types.TraitFavoriteSeason] += 0.05
+			le.curiosity[types.TraitLifeStyle] += 0.15
+			le.curiosity[types.TraitHobby] += 0.15
+			le.curiosity[types.TraitFoodPreference] += 0.12
+			le.curiosity[types.TraitFavoriteSnack] += 0.1
+			le.curiosity[types.TraitFavoriteSeason] += 0.1
+			le.curiosity[types.TraitConversationStyle] += 0.1
+			le.curiosity[types.TraitReadingHabit] += 0.08
 		}
 		if state == string(types.StateProcrastinating) {
 			le.curiosity[types.TraitGamePreference] += 0.2
 			le.curiosity[types.TraitAnimePreference] += 0.15
 			le.curiosity[types.TraitFavoriteWeather] += 0.1
+			le.curiosity[types.TraitHobby] += 0.15
+		}
+		if state == string(types.StateDeepWork) {
+			// すでに上でブーストしているが、personal 系も追加
+			le.curiosity[types.TraitFavoriteDrink] += 0.1 // 集中中の飲み物
+			le.curiosity[types.TraitLifeStyle] += 0.08    // 夜型？朝型？
+		}
+		if state == string(types.StateSuccess) {
+			// 既存に追加
+			le.curiosity[types.TraitHobby] += 0.08        // 達成後の楽しみ
+			le.curiosity[types.TraitFavoriteSnack] += 0.07
 		}
 	case "observation_event":
 		obsType := ev.Payload["type"].(string)
@@ -182,10 +198,16 @@ func (le *LearningEngine) evaluateTrigger() {
 		if progress.Confidence >= 1.0 {
 			continue
 		}
-		// 直近 TraitAnswerCooldown 以内に回答済みのトレイトはスキップ
-		if progress.LastUpdated != "" {
-			lastAnswered := types.StrToTime(progress.LastUpdated)
-			if !lastAnswered.IsZero() && time.Since(lastAnswered) < TraitAnswerCooldown {
+		// 直近 TraitAnswerCooldown 以内に質問済み or 回答済みのトレイトはスキップ
+		// LastAsked: 質問発火時刻（スキップしても記録）
+		// LastUpdated: 回答時刻
+		lastRef := progress.LastAsked
+		if progress.LastUpdated > lastRef {
+			lastRef = progress.LastUpdated
+		}
+		if lastRef != "" {
+			lastTime := types.StrToTime(lastRef)
+			if !lastTime.IsZero() && time.Since(lastTime) < TraitAnswerCooldown {
 				continue
 			}
 		}
@@ -200,8 +222,9 @@ func (le *LearningEngine) evaluateTrigger() {
 			return
 		}
 
-		// 候補の中からランダムに選択
-		bestTrait := candidates[rand.Intn(len(candidates))]
+		// personal/hobby/lifestyle 系を dev 系より優先してウェイト付き選択する。
+		// dev 系ばかり溜まりやすい環境でもプライベートな質問が混ざるようにする。
+		bestTrait := weightedTraitSelect(candidates)
 
 		go le.triggerQuestion(bestTrait)
 
@@ -211,17 +234,66 @@ func (le *LearningEngine) evaluateTrigger() {
 	}
 }
 
+// personalTraitWeight は personal/hobby/lifestyle 系 trait のウェイト（dev 系は 1）。
+// 高いほど選ばれやすくなり、技術質問偏重を緩和する。
+var personalTraitWeight = map[types.TraitID]int{
+	types.TraitHobby:                 4,
+	types.TraitGamePreference:        4,
+	types.TraitAnimePreference:       4,
+	types.TraitReadingHabit:          4,
+	types.TraitFoodPreference:        3,
+	types.TraitFavoriteDrink:         3,
+	types.TraitFavoriteSnack:         3,
+	types.TraitMusicHabit:            3,
+	types.TraitLifeStyle:             3,
+	types.TraitFavoriteSeason:        3,
+	types.TraitFavoriteWeather:       3,
+	types.TraitPersonalityAttraction: 4,
+	types.TraitConversationStyle:     3,
+	types.TraitCommunicationStyle:    2,
+	types.TraitStressRelief:          2,
+	types.TraitAlonePreference:       2,
+	types.TraitEncouragementStyle:    2,
+	types.TraitPraisePreference:      2,
+	types.TraitMotivationSource:      2,
+}
+
+// weightedTraitSelect はウェイト付きランダムで trait を選択する。
+func weightedTraitSelect(candidates []types.TraitID) types.TraitID {
+	total := 0
+	for _, t := range candidates {
+		w := 1
+		if v, ok := personalTraitWeight[t]; ok {
+			w = v
+		}
+		total += w
+	}
+	r := rand.Intn(total)
+	for _, t := range candidates {
+		w := 1
+		if v, ok := personalTraitWeight[t]; ok {
+			w = v
+		}
+		r -= w
+		if r < 0 {
+			return t
+		}
+	}
+	return candidates[len(candidates)-1]
+}
+
 // allTraits は TriggerQuestion でランダム選択する際に使うトレイット全リスト。
+// 技術系（debugging_style, code_review_style, experiment_style, tech_interest）と
+// 開発/働き方系（focus_style, feedback_preference, interruption_tolerance, work_pace,
+// break_style, deadline_style, multitask_style, risk_tolerance）は
+// 「技術のことわからない後輩」キャラ設定と合わず、セリフ生成にも役立たないため除外。
 var allTraits = []types.TraitID{
-	types.TraitFocusStyle, types.TraitFeedbackPreference, types.TraitInterruptionTolerance,
-	types.TraitDebuggingStyle, types.TraitCodeReviewStyle, types.TraitExperimentationStyle,
-	types.TraitWorkPace, types.TraitBreakStyle, types.TraitDeadlineStyle, types.TraitMultitaskStyle,
-	types.TraitThinkingStyle, types.TraitCuriosityLevel, types.TraitRiskTolerance, types.TraitPerfectionism,
+	types.TraitThinkingStyle, types.TraitCuriosityLevel, types.TraitPerfectionism,
 	types.TraitLearningStyle, types.TraitMotivationSource, types.TraitTeachingStyle,
 	types.TraitWorkspaceStyle, types.TraitNotificationStyle, types.TraitSilencePreference, types.TraitBackgroundNoise,
 	types.TraitEncouragementStyle, types.TraitPraisePreference, types.TraitStressRelief, types.TraitAlonePreference,
 	types.TraitLifeStyle, types.TraitMusicHabit, types.TraitFoodPreference, types.TraitFavoriteDrink, types.TraitFavoriteSnack,
-	types.TraitHobby, types.TraitGamePreference, types.TraitAnimePreference, types.TraitReadingHabit, types.TraitTechInterest,
+	types.TraitHobby, types.TraitGamePreference, types.TraitAnimePreference, types.TraitReadingHabit,
 	types.TraitCommunicationStyle, types.TraitConversationStyle, types.TraitPersonalityAttraction,
 	types.TraitFavoriteSeason, types.TraitFavoriteWeather,
 }
@@ -259,6 +331,9 @@ func (le *LearningEngine) triggerQuestion(trait types.TraitID) {
 
 	fmt.Printf("[LEARNING] Sakura is curious about %s (Stage %d) because of recent activity\n", trait, progress.CurrentStage)
 
+	// 質問発火時刻を記録（スキップされても12時間は再度聞かない）
+	le.profileStore.RecordTraitAsked(trait)
+
 	le.dispatcher.DispatchEvent(types.Event{
 		Type: "question_event",
 		Payload: map[string]interface{}{
@@ -275,7 +350,7 @@ func preambleForPersonality(personality, lang string) string {
 		switch personality {
 		case "genki", "energetic":
 			return "Hey, can I ask you something real quick?"
-		case "tsukime", "strict":
+		case "cool", "strict":
 			return "One thing I wanted to check with you."
 		default: // cute, soft
 			return "Um... I've been wondering something..."
@@ -284,7 +359,7 @@ func preambleForPersonality(personality, lang string) string {
 	switch personality {
 	case "genki", "energetic":
 		return "ちょっと聞いていいですか！"
-	case "tsukime", "strict":
+	case "cool", "strict":
 		return "一つ確認させてください。"
 	default: // cute, soft
 		return "あの…聞きたいんですが…"

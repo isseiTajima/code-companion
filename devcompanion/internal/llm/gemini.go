@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -20,7 +21,7 @@ type GeminiClient struct {
 // NewGeminiClient は GeminiClient を作成する。
 func NewGeminiClient(apiKey string) *GeminiClient {
 	return &GeminiClient{
-		apiKey:  apiKey,
+		apiKey:  strings.TrimSpace(apiKey),
 		model:   "models/gemini-flash-latest", // 最新の安定板エイリアスに変更
 		timeout: 20 * time.Second,
 	}
@@ -91,7 +92,12 @@ func (c *GeminiClient) Generate(ctx context.Context, in OllamaInput) (string, st
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", prompt, fmt.Errorf("gemini api error (status %d): %s", resp.StatusCode, string(body))
+		msg := string(body)
+		// エラー内容に含まれるキーをマスク
+		if c.apiKey != "" {
+			msg = strings.ReplaceAll(msg, c.apiKey, "REDACTED")
+		}
+		return "", prompt, fmt.Errorf("gemini api error (status %d): %s", resp.StatusCode, msg)
 	}
 
 	var res geminiResponse

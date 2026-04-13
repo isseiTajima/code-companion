@@ -14,6 +14,10 @@ export function CancelInstall() {
   return window['go']['main']['App']['CancelInstall']();
 }
 
+export function CollapseFromReview() {
+  return window['go']['main']['App']['CollapseFromReview']();
+}
+
 export function CompleteSetup() {
   return window['go']['main']['App']['CompleteSetup']();
 }
@@ -34,8 +38,16 @@ export function ExpandForOnboarding() {
   return window['go']['main']['App']['ExpandForOnboarding']();
 }
 
+export function ExpandForReview() {
+  return window['go']['main']['App']['ExpandForReview']();
+}
+
 export function GetContext() {
   return window['go']['main']['App']['GetContext']();
+}
+
+export function GetUnratedSpeeches() {
+  return window['go']['main']['App']['GetUnratedSpeeches']();
 }
 
 export function HandleQuestionAnswer(arg1, arg2, arg3) {
@@ -66,12 +78,24 @@ export function PullModel(arg1) {
   return window['go']['main']['App']['PullModel'](arg1);
 }
 
+export function RateSpeech(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['RateSpeech'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function RecordNewsInterest(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RecordNewsInterest'](arg1, arg2, arg3);
+}
+
 export function SaveConfig(arg1) {
   return window['go']['main']['App']['SaveConfig'](arg1);
 }
 
 export function SetClickThrough(arg1) {
   return window['go']['main']['App']['SetClickThrough'](arg1);
+}
+
+export function SetInteractiveMode(arg1) {
+  return window['go']['main']['App']['SetInteractiveMode'](arg1);
 }
 
 export function SetLastEvent(arg1) {
@@ -84,4 +108,8 @@ export function SetMonitor(arg1) {
 
 export function TriggerTestQuestion(arg1) {
   return window['go']['main']['App']['TriggerTestQuestion'](arg1);
+}
+
+export function UpdateInteractiveRegions(arg1) {
+  return window['go']['main']['App']['UpdateInteractiveRegions'](arg1);
 }

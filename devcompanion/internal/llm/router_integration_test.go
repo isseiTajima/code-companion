@@ -19,7 +19,7 @@ func TestSpeechGenerator_WithRouter_OllamaFail_ClaudeSuccess(t *testing.T) {
 	claudeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		resp := map[string]interface{}{
-			"content": []map[string]string{{"text": "claude says hello"}},
+			"content": []map[string]string{{"text": "大丈夫ですよ、ちゃんと頑張ってますね"}},
 		}
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
@@ -43,8 +43,8 @@ func TestSpeechGenerator_WithRouter_OllamaFail_ClaudeSuccess(t *testing.T) {
 	}
 
 	speech, _, _ := sg.Generate(event, cfg, ReasonUserQuestion, profile.DevProfile{}, "最近どんな感じ？")
-	if speech != "claude says hello" {
-		t.Fatalf("want 'claude says hello' from Router fallback, got %q", speech)
+	if speech != "大丈夫ですよ、ちゃんと頑張ってますね" {
+		t.Fatalf("want Japanese speech from Claude, got %q", speech)
 	}
 }
 

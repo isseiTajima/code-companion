@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"log"
+	"net/url"
 	"strings"
 	"time"
 
@@ -30,7 +31,10 @@ type MonitorEvent struct {
 	Context     types.ContextInfo     `json:"context"`
 	Decision    types.ContextDecision `json:"decision"`
 	Details     string                `json:"details"`
-	IsAISession bool                  `json:"is_ai_session"` // AIエージェント実行中（バイブコーディング）
+	IsAISession    bool     `json:"is_ai_session"`   // AIエージェント実行中（バイブコーディング）
+	NewsContext    string   `json:"news_context"`    // ニュース見出し（InitCuriosity用）
+	NewsTags       []string `json:"news_tags"`       // フィードカテゴリ（フィードバック学習用）
+	WeatherContext string   `json:"weather_context"` // 天気情報（InitWeather用）
 }
 
 // Monitor はパイプライン（Sensors -> Signals -> Context）を管理する。
@@ -164,8 +168,14 @@ func (m *Monitor) Run(ctx context.Context) {
 
 				details := sig.Value
 				if sig.Type == types.SigWebNavigated {
-					// sig.Message is "browsing: {title}" — extract the page title
-					details = strings.TrimPrefix(sig.Message, "browsing: ")
+					// sig.Value = URL, sig.Message = "browsing: {title}"
+					title := strings.TrimPrefix(sig.Message, "browsing: ")
+					domain := extractDomain(sig.Value)
+					if domain != "" && domain != title {
+						details = title + "（" + domain + "）"
+					} else {
+						details = title
+					}
 				}
 
 				ev := MonitorEvent{
@@ -199,20 +209,35 @@ func (m *Monitor) InjectSignal(sig types.Signal) {
 	}
 }
 
+// startOnce はフラグが false のときに true にして startEvent を返す。
+// 既に true なら activeEvent を返す。セッション開始の重複発火防止に使う。
+func startOnce(active *bool, startEvent, activeEvent types.HighLevelEvent) types.HighLevelEvent {
+	if !*active {
+		*active = true
+		return startEvent
+	}
+	return activeEvent
+}
+
+// extractDomain はURLからホスト名（www.なし）を返す。パース失敗時は空文字。
+func extractDomain(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	host := strings.TrimPrefix(u.Host, "www.")
+	return host
+}
+
 func (m *Monitor) classifySignal(sig types.Signal) types.HighLevelEvent {
 	switch sig.Type {
 	case types.SigProcessStarted:
 		if sig.Source == types.SourceAgent {
-			if !m.aiSessionActive {
-				m.aiSessionActive = true
-				return types.EventAISessionStarted
-			}
-			return types.EventAISessionActive
+			return startOnce(&m.aiSessionActive, types.EventAISessionStarted, types.EventAISessionActive)
 		}
 	case types.SigFileModified, types.SigGitCommit:
-		if !m.devSessionActive {
-			m.devSessionActive = true
-			return types.EventDevSessionStarted
+		if ev := startOnce(&m.devSessionActive, types.EventDevSessionStarted, ""); ev != "" {
+			return ev
 		}
 		if sig.Source == types.SourceGit {
 			return types.EventGitActivity

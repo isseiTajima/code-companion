@@ -9,7 +9,7 @@ import (
 // SpeechState は発言状態と履歴を管理する。
 type SpeechState struct {
 	mu           sync.RWMutex
-	recentLines  []string     // 最大10件の発言履歴
+	recentLines  []string     // 最大20件の発言履歴
 	recentEvents []SpeechEvent // 最大10件のイベント履歴
 }
 
@@ -21,7 +21,7 @@ type SpeechEvent struct {
 // NewSpeechState は SpeechState を初期化する。
 func NewSpeechState() *SpeechState {
 	return &SpeechState{
-		recentLines:  make([]string, 0, 10),
+		recentLines:  make([]string, 0, 20),
 		recentEvents: make([]SpeechEvent, 0, 10),
 	}
 }
@@ -32,7 +32,7 @@ func (ss *SpeechState) AddLine(text string) {
 	defer ss.mu.Unlock()
 
 	ss.recentLines = append(ss.recentLines, text)
-	if len(ss.recentLines) > 10 {
+	if len(ss.recentLines) > 20 {
 		ss.recentLines = ss.recentLines[1:]
 	}
 }
@@ -94,11 +94,8 @@ func (ss *SpeechState) IsDuplicate(text string) bool {
 		return true // 空文字（または記号のみ）は重複扱い
 	}
 
-	// 直近5件を確認（プール利用時はより広い範囲をチェック）
-	start := len(ss.recentLines) - 5
-	if start < 0 {
-		start = 0
-	}
+	// 全履歴（最大10件）を確認
+	start := 0
 
 	for i := start; i < len(ss.recentLines); i++ {
 		if normalizeForDedup(ss.recentLines[i]) == normTarget {

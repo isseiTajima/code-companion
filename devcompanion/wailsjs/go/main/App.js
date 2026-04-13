@@ -61,3 +61,23 @@ export function DeleteModel(arg1) {
 export function CreateSakuraModel(arg1) {
   return window['go']['main']['App']['CreateSakuraModel'](arg1);
 }
+
+export function RecordNewsInterest(arg1, arg2, arg3) {
+  return window["go"]["main"]["App"]["RecordNewsInterest"](arg1, arg2, arg3);
+}
+
+export function ExpandForReview() {
+  return window["go"]["main"]["App"]["ExpandForReview"]();
+}
+
+export function CollapseFromReview() {
+  return window["go"]["main"]["App"]["CollapseFromReview"]();
+}
+
+export function GetUnratedSpeeches() {
+  return window["go"]["main"]["App"]["GetUnratedSpeeches"]();
+}
+
+export function RateSpeech(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window["go"]["main"]["App"]["RateSpeech"](arg1, arg2, arg3, arg4, arg5, arg6);
+}

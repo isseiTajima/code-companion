@@ -24,8 +24,8 @@
   let afterModelStep = $state<'install' | 'finish'>('install')
 
   const MODELS = [
-    { id: 'qwen2.5:4b', label: 'Standard (recommended)', size: 'Qwen 2.5 4B', vram: '~3GB' },
-    { id: 'qwen2.5:7b', label: 'High quality',           size: 'Qwen 2.5 7B', vram: '~5GB' },
+    { id: 'qwen3.5:9b', label: 'Standard (推奨・バランス重視)', size: 'Qwen 3.5 9B', vram: '~5.5GB' },
+    { id: 'swallow:8b', label: 'High quality (日本語特化)',    size: 'Swallow 8B',  vram: '~5GB' },
   ]
 
   async function init() {
@@ -241,7 +241,7 @@
 </div>
 
 <style>
-  .onboarding-card { background: white; border: 1.5px solid #eee; border-radius: 14px; padding: 14px; width: 200px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15); color: #333; animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+  .onboarding-card { background: white; border: 1.5px solid #eee; border-radius: 14px; padding: 14px; width: 200px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15); color: #333; animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: auto; }
   @keyframes slideUp { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
   .header { margin-bottom: 12px; text-align: center; }
   .title { font-weight: bold; font-size: 12px; color: #e91e63; }
